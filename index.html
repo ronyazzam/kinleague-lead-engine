@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kinleague Lead Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black: #080809;
+    --gold: #c8b89a;
+    --gold-light: rgba(200,184,154,0.15);
+    --white: #faf8f4;
+    --surface: #f4f2ee;
+    --border: rgba(0,0,0,0.08);
+    --text: #1a1814;
+    --muted: #6b6560;
+    --hot: #dc2626;
+    --warm: #d97706;
+    --cold: #2563eb;
+    --success: #16a34a;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--surface); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  .header {
+    background: var(--black);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; flex-direction: column; gap: 2px; }
+  .header-logo {
+    font-family: 'DM Mono', monospace;
+    font-size: 15px;
+    color: var(--white);
+    letter-spacing: -0.02em;
+    font-weight: 500;
+  }
+  .header-logo span { color: var(--gold); }
+  .header-sub {
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .header-right { display: flex; gap: 10px; align-items: center; }
+  #lastRun { font-size: 10px; color: rgba(255,255,255,0.3); font-family: 'DM Mono', monospace; }
+
+  /* Progress bar */
+  .progress-bar { height: 3px; background: rgba(200,184,154,0.2); width: 100%; display: none; }
+  .progress-bar.active { display: block; }
+  .progress-fill { height: 100%; background: var(--gold); animation: prog 60s linear forwards; width: 0; }
+  @keyframes prog { to { width: 95%; } }
+
+  /* Stats */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-card {
+    padding: 20px 24px;
+    text-align: center;
+    border-right: 1px solid var(--border);
+  }
+  .stat-card:last-child { border-right: none; }
+  .stat-num { font-size: 30px; font-weight: 600; color: var(--text); line-height: 1; letter-spacing: -1px; }
+  .stat-num.hot { color: var(--hot); }
+  .stat-num.warm { color: var(--warm); }
+  .stat-num.pushed { color: var(--success); }
+  .stat-label { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px; }
+
+  /* Toolbar */
+  .toolbar {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 52px;
+    z-index: 90;
+  }
+  .filter-tabs { display: flex; gap: 4px; }
+  .tab {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .tab:hover { border-color: var(--text); color: var(--text); }
+  .tab.active { background: var(--black); color: var(--white); border-color: var(--black); }
+  .search-input {
+    flex: 1; min-width: 200px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--surface);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--gold); }
+  .results-count { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; white-space: nowrap; }
+
+  /* Buttons */
+  .btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--gold); color: var(--black); font-weight: 600; }
+  .btn-primary:hover { background: #b8a88a; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-outline { background: transparent; border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.5); }
+  .btn-outline:hover { border-color: rgba(255,255,255,0.4); color: rgba(255,255,255,0.8); }
+  .btn-dark { background: var(--black); color: var(--white); }
+  .btn-dark:hover { background: #2a2a2a; }
+  .btn-success { background: var(--success); color: white; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn-ghost:hover { background: var(--black); color: var(--white); border-color: var(--black); }
+
+  /* Table */
+  .content { padding: 24px 32px; }
+  .leads-table { width: 100%; border-collapse: collapse; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .leads-table thead { position: sticky; top: 100px; z-index: 80; }
+  .leads-table th {
+    text-align: left;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #f7f5f1;
+  }
+  .leads-table td {
+    padding: 13px 16px;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--white);
+    font-size: 13px;
+    vertical-align: top;
+  }
+  .leads-table tr:last-child td { border-bottom: none; }
+  .leads-table tr:hover td { background: #faf8f4; }
+  .company-name { font-weight: 600; color: var(--text); font-size: 13px; }
+  .role-title { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  /* Heat badges */
+  .heat-badge {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .heat-Hot { background: rgba(220,38,38,0.1); color: var(--hot); }
+  .heat-Warm { background: rgba(217,119,6,0.1); color: var(--warm); }
+  .heat-Cold { background: rgba(37,99,235,0.1); color: var(--cold); }
+
+  .source-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--surface);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+  .score-pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  /* Action buttons */
+  .action-row { display: flex; gap: 5px; align-items: center; }
+  .action-btn {
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.15s;
+    font-family: 'Inter', sans-serif;
+    white-space: nowrap;
+  }
+  .action-btn:hover:not(:disabled) { background: var(--black); color: var(--white); border-color: var(--black); }
+  .action-btn.pushed { background: var(--success) !important; color: white !important; border-color: var(--success) !important; cursor: default; }
+  .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Message panel */
+  .msg-panel {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 14px 14px 16px;
+    margin-top: 10px;
+    font-size: 12.5px;
+    color: var(--text);
+    line-height: 1.65;
+    position: relative;
+  }
+  .msg-panel.open { display: block; }
+  .msg-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .copy-btn {
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--white);
+    cursor: pointer;
+    color: var(--muted);
+    font-family: 'Inter', sans-serif;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { background: var(--black); color: white; }
+  .msg-editable {
+    background: transparent;
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 12.5px;
+    color: var(--text);
+    line-height: 1.65;
+    font-family: 'Inter', sans-serif;
+    resize: none;
+    min-height: 80px;
+  }
+
+  /* Empty / loading */
+  .empty-state { text-align: center; padding: 80px 20px; color: var(--muted); }
+  .empty-state h3 { font-size: 20px; font-weight: 500; margin-bottom: 10px; color: var(--text); }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: var(--white); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
+  .spinner-dark { border-color: rgba(0,0,0,0.15); border-top-color: var(--black); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--black); color: var(--white);
+    padding: 12px 20px; border-radius: 8px;
+    font-size: 13px; font-family: 'DM Mono', monospace;
+    display: none; z-index: 1000;
+    border-left: 3px solid var(--gold);
+    max-width: 340px;
+    line-height: 1.4;
+  }
+  .toast.show { display: block; animation: slideIn 0.25s ease; }
+  @keyframes slideIn { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* Bulk bar */
+  .bulk-bar {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--black); color: var(--white);
+    border-radius: 12px; padding: 12px 18px;
+    display: none; align-items: center; gap: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3); z-index: 500;
+    animation: slideUp 0.2s ease; white-space: nowrap;
+  }
+  .bulk-bar.show { display: flex; }
+  @keyframes slideUp { from { transform: translateX(-50%) translateY(10px); opacity:0; } to { transform: translateX(-50%) translateY(0); opacity:1; } }
+
+  @media (max-width: 768px) {
+    .stats-bar { grid-template-columns: repeat(3, 1fr); }
+    .toolbar { padding: 10px 16px; }
+    .content { padding: 16px; }
+    .header { padding: 12px 16px; }
+    .leads-table th:nth-child(3), .leads-table td:nth-child(3),
+    .leads-table th:nth-child(5), .leads-table td:nth-child(5) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progressBar"><div class="progress-fill"></div></div>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">Kinleague<span>.</span> Lead Engine</div>
+    <div class="header-sub">Sales Talent Intelligence — UAE & Lebanon</div>
+  </div>
+  <div class="header-right">
+    <span id="lastRun"></span>
+    <button class="btn btn-outline" onclick="exportCSV()">↓ Export CSV</button>
+    <button class="btn btn-primary" id="scrapeBtn" onclick="runScraper()">▶ Run Scraper</button>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-card">
+    <div class="stat-num" id="statTotal">—</div>
+    <div class="stat-label">Total Leads</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num hot" id="statHot">—</div>
+    <div class="stat-label">🔥 Hot Leads</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num warm" id="statWarm">—</div>
+    <div class="stat-label">♨ Warm Leads</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="statNew">—</div>
+    <div class="stat-label">New (24h)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num pushed" id="statPushed">0</div>
+    <div class="stat-label">Pushed to CRM</div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="filter-tabs">
+    <button class="tab active" onclick="filterLeads('all', this)">All</button>
+    <button class="tab" onclick="filterLeads('Hot', this)">🔥 Hot</button>
+    <button class="tab" onclick="filterLeads('Warm', this)">♨ Warm</button>
+    <button class="tab" onclick="filterLeads('Cold', this)">Cold</button>
+    <button class="tab" onclick="filterLeads('new', this)">New 24h</button>
+    <button class="tab" onclick="filterLeads('pushed', this)">Pushed</button>
+  </div>
+  <input type="text" class="search-input" id="searchInput" placeholder="Search company, role, location..." oninput="searchLeads(this.value)">
+  <span class="results-count" id="resultsCount"></span>
+  <button class="btn btn-dark" onclick="pushAllHotToCRM()">Push Hot → CRM</button>
+</div>
+
+<div class="content">
+  <div id="leadsContainer">
+    <div class="empty-state">
+      <h3>No leads yet</h3>
+      <p>Click <strong>Run Scraper</strong> to find companies actively hiring<br>Sales & Marketing talent in UAE and Lebanon right now.</p>
+      <br><br>
+      <button class="btn btn-primary" onclick="runScraper()" style="margin:0 auto;font-size:12px;padding:10px 22px;">▶ Run Scraper Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk action bar -->
+<div class="bulk-bar" id="bulkBar">
+  <span id="bulkCount" style="font-size:12px;padding-right:12px;border-right:1px solid #333;"></span>
+  <button class="btn btn-primary" onclick="pushSelectedToCRM()" style="font-size:10px;padding:7px 14px;">→ Push to CRM</button>
+  <button onclick="clearSelection()" style="background:transparent;border:1px solid #333;color:#888;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;">×</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const CRM_SUPABASE_URL = 'https://babhsufcvybimxysgvwb.supabase.co';
+const CRM_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhYmhzdWZjdnliaW14eXNndndiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTk0MTgsImV4cCI6MjA5NjE3NTQxOH0.CgOQgPhLYD_FnTgF9Sm2NGETDll9dQT8gWCkFtpcsHc';
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let allLeads = [];
+let filteredLeads = [];
+let currentFilter = 'all';
+let currentSearch = '';
+let selected = new Set();
+let pushedIds = new Set(JSON.parse(localStorage.getItem('kl_engine_pushed') || '[]'));
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+window.addEventListener('load', async () => {
+  // Load persisted leads from cache
+  const cached = localStorage.getItem('kl_engine_leads');
+  if (cached) {
+    try {
+      allLeads = JSON.parse(cached);
+      applyFilters(currentFilter, currentSearch);
+      updateStats();
+      const last = localStorage.getItem('kl_engine_last_run');
+      if (last) document.getElementById('lastRun').textContent = 'Last run: ' + new Date(last).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+    } catch {}
+  }
+
+  // Also try fetching from API (if previously scraped server-side)
+  try {
+    const res = await fetch('/api/leads-data');
+    const data = await res.json();
+    if (data.leads && data.leads.length > allLeads.length) {
+      allLeads = data.leads;
+      applyFilters(currentFilter, currentSearch);
+      updateStats();
+    }
+  } catch {}
+});
+
+// ─── SCRAPER ─────────────────────────────────────────────────────────────────
+async function runScraper() {
+  const btn = document.getElementById('scrapeBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Scraping...';
+  document.getElementById('progressBar').classList.add('active');
+  showToast('Scraping LinkedIn, Indeed, Bayt, Glassdoor… ~30–60 seconds');
+
+  try {
+    const res = await fetch('/api/scrape', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success && data.leads) {
+      allLeads = data.leads;
+      localStorage.setItem('kl_engine_leads', JSON.stringify(allLeads));
+      localStorage.setItem('kl_engine_last_run', new Date().toISOString());
+      applyFilters(currentFilter, currentSearch);
+      updateStats();
+      const hot = allLeads.filter(l => l.heat === 'Hot').length;
+      showToast(`✓ Found ${data.count} leads — ${hot} hot, ${allLeads.filter(l=>l.heat==='Warm').length} warm`);
+      document.getElementById('lastRun').textContent = 'Last run: ' + new Date().toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+    } else {
+      showToast('Scraper error: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    // If API not available (local dev without vercel dev), use demo data
+    showToast('API not available — loading demo leads');
+    loadDemoLeads();
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '▶ Run Scraper';
+  document.getElementById('progressBar').classList.remove('active');
+}
+
+function loadDemoLeads() {
+  const demoRaw = [
+    { title: 'Head of Sales', company: 'Noon.com', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-2*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:true },
+    { title: 'VP of Sales', company: 'Careem', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-4*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:true },
+    { title: 'Sales Director', company: 'Talabat', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-6*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:false },
+    { title: 'Business Development Manager', company: 'Property Finder', location: 'Dubai, UAE', source: 'Indeed', postedAt: new Date(Date.now()-8*36e5).toISOString(), link:'https://ae.indeed.com/', funded:false },
+    { title: 'Enterprise Sales Manager', company: 'Salesforce UAE', location: 'Dubai, UAE', source: 'Glassdoor', postedAt: new Date(Date.now()-10*36e5).toISOString(), link:'https://www.glassdoor.com/', funded:false },
+    { title: 'Sales Executive', company: 'Anghami', location: 'Beirut, Lebanon', source: 'LinkedIn', postedAt: new Date(Date.now()-12*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:true },
+    { title: 'Growth Manager', company: 'Kitopi', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-15*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:true },
+    { title: 'Sales Manager', company: 'Bayut', location: 'Dubai, UAE', source: 'Indeed', postedAt: new Date(Date.now()-18*36e5).toISOString(), link:'https://ae.indeed.com/', funded:false },
+    { title: 'Revenue Manager', company: 'Rotana Hotels', location: 'Abu Dhabi, UAE', source: 'Bayt', postedAt: new Date(Date.now()-20*36e5).toISOString(), link:'https://www.bayt.com/', funded:false },
+    { title: 'Account Executive', company: 'HubSpot MENA', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-22*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:false },
+    { title: 'Regional Sales Manager', company: 'Aramex', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-25*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:false },
+    { title: 'Marketing Manager', company: 'Dubizzle', location: 'Dubai, UAE', source: 'Bayt', postedAt: new Date(Date.now()-28*36e5).toISOString(), link:'https://www.bayt.com/', funded:false },
+    { title: 'BDM - SaaS', company: 'Wamda', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-30*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:true },
+    { title: 'Channel Sales Manager', company: 'Huawei UAE', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-35*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:false },
+    { title: 'Sales Manager', company: 'Emaar Properties', location: 'Dubai, UAE', source: 'Bayt', postedAt: new Date(Date.now()-40*36e5).toISOString(), link:'https://www.bayt.com/', funded:false },
+    { title: 'Account Manager', company: 'du Telecom', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-45*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:false },
+    { title: 'Sales Executive', company: 'Majid Al Futtaim', location: 'Dubai, UAE', source: 'Glassdoor', postedAt: new Date(Date.now()-50*36e5).toISOString(), link:'https://www.glassdoor.com/', funded:false },
+    { title: 'Commercial Manager', company: 'Etisalat (e&)', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-55*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:false },
+    { title: 'Inside Sales Lead', company: 'Oracle MENA', location: 'Dubai, UAE', source: 'Indeed', postedAt: new Date(Date.now()-60*36e5).toISOString(), link:'https://ae.indeed.com/', funded:false },
+    { title: 'Partnerships Manager', company: 'Fetchr', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now()-70*36e5).toISOString(), link:'https://www.linkedin.com/jobs/', funded:true },
+  ];
+
+  allLeads = demoRaw.map(lead => {
+    lead = scoreLead(lead);
+    lead.message = generateMessage(lead);
+    lead.id = `lead_demo_${Math.random().toString(36).slice(2,9)}`;
+    lead.status = 'new';
+    lead.scrapedAt = new Date().toISOString();
+    return lead;
+  }).sort((a,b) => b.score - a.score);
+
+  localStorage.setItem('kl_engine_leads', JSON.stringify(allLeads));
+  localStorage.setItem('kl_engine_last_run', new Date().toISOString());
+  applyFilters(currentFilter, currentSearch);
+  updateStats();
+  showToast(`✓ Loaded ${allLeads.length} demo leads — ${allLeads.filter(l=>l.heat==='Hot').length} hot`);
+  document.getElementById('lastRun').textContent = 'Demo mode — ' + new Date().toLocaleTimeString();
+}
+
+function scoreLead(lead) {
+  let score = 0;
+  const t = lead.title.toLowerCase();
+  if (t.includes('head') || t.includes('director') || t.includes('vp') || t.includes('chief')) score += 30;
+  else if (t.includes('manager') || t.includes('executive') || t.includes('lead')) score += 20;
+  else score += 10;
+  const h = (Date.now() - new Date(lead.postedAt).getTime()) / 36e5;
+  if (h < 6) score += 40; else if (h < 24) score += 30; else if (h < 48) score += 20; else if (h < 72) score += 10;
+  if (lead.source === 'LinkedIn') score += 10; else if (lead.source === 'Glassdoor') score += 8;
+  if (lead.funded) score += 25;
+  if (t.includes('enterprise') || t.includes('strategic')) score += 10;
+  lead.heat = score >= 60 ? 'Hot' : score >= 35 ? 'Warm' : 'Cold';
+  lead.score = score;
+  return lead;
+}
+
+function generateMessage(lead) {
+  const t = { Hot: `Hi — saw that ${lead.company} is actively hiring a ${lead.title} in ${lead.location}. We place pre-vetted Sales & Marketing talent in 72 hours, at 10% of annual salary. Lebanese professionals — multilingual, commercially sharp, and up to 50% more cost-effective than local hires. Would a quick call make sense this week?`, Warm: `Hi — noticed ${lead.company} is looking for a ${lead.title}. We specialise in Sales & Marketing placement across Dubai and Lebanon — pre-vetted shortlist in 72 hours, 10% placement fee. Worth a conversation?`, Cold: `Hi — we help companies in ${lead.location} hire Sales and Marketing talent in 72 hours. Seeing ${lead.company} is hiring — happy to share how we work if it's useful.` };
+  return t[lead.heat] || t.Warm;
+}
+
+// ─── FILTER & RENDER ─────────────────────────────────────────────────────────
+function filterLeads(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  applyFilters(filter, currentSearch);
+}
+
+function searchLeads(query) {
+  currentSearch = query.toLowerCase();
+  applyFilters(currentFilter, currentSearch);
+}
+
+function applyFilters(filter, search) {
+  let leads = allLeads;
+  if (filter === 'Hot' || filter === 'Warm' || filter === 'Cold') leads = leads.filter(l => l.heat === filter);
+  if (filter === 'new') { const y = Date.now() - 86400000; leads = leads.filter(l => new Date(l.scrapedAt||l.postedAt).getTime() > y); }
+  if (filter === 'pushed') leads = leads.filter(l => pushedIds.has(l.id));
+  if (search) leads = leads.filter(l => (l.company+' '+l.title+' '+l.location).toLowerCase().includes(search));
+  filteredLeads = leads;
+  renderLeads(leads);
+  document.getElementById('resultsCount').textContent = leads.length + ' leads';
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = allLeads.length;
+  document.getElementById('statHot').textContent = allLeads.filter(l => l.heat === 'Hot').length;
+  document.getElementById('statWarm').textContent = allLeads.filter(l => l.heat === 'Warm').length;
+  const y = Date.now() - 86400000;
+  document.getElementById('statNew').textContent = allLeads.filter(l => new Date(l.scrapedAt||l.postedAt).getTime() > y).length;
+  document.getElementById('statPushed').textContent = pushedIds.size;
+}
+
+function renderLeads(leads) {
+  const c = document.getElementById('leadsContainer');
+  if (!leads.length) {
+    c.innerHTML = '<div class="empty-state"><h3>No leads match</h3><p>Try a different filter or run the scraper again.</p></div>';
+    return;
+  }
+  c.innerHTML = `<table class="leads-table">
+    <thead><tr>
+      <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" style="cursor:pointer;"></th>
+      <th>Company & Role</th>
+      <th>Location</th>
+      <th>Source</th>
+      <th>Heat</th>
+      <th>Score</th>
+      <th>Posted</th>
+      <th>Actions</th>
+    </tr></thead>
+    <tbody>${leads.map(l => renderRow(l)).join('')}</tbody>
+  </table>`;
+}
+
+function renderRow(lead) {
+  const isPushed = pushedIds.has(lead.id);
+  const isSelected = selected.has(lead.id);
+  const time = timeAgo(lead.postedAt);
+  const safeId = lead.id.replace(/[^a-z0-9_]/gi, '_');
+
+  return `<tr id="row-${safeId}">
+    <td style="width:36px;"><input type="checkbox" ${isSelected?'checked':''} onchange="toggleSelect('${lead.id}', this.checked)" style="cursor:pointer;"></td>
+    <td>
+      <div class="company-name">${esc(lead.company)}</div>
+      <div class="role-title">${esc(lead.title)}</div>
+      <div class="msg-panel" id="msg-${safeId}">
+        <textarea class="msg-editable" id="msgtext-${safeId}" rows="3">${esc(lead.message)}</textarea>
+        <div class="msg-actions">
+          <button class="copy-btn" onclick="copyMessage('${safeId}')">Copy message</button>
+          <button class="copy-btn" onclick="openLinkedIn('${esc(lead.company)}')">Search on LinkedIn ↗</button>
+        </div>
+      </div>
+    </td>
+    <td style="color:var(--muted);font-size:12px;">${esc(lead.location)}</td>
+    <td><span class="source-tag">${esc(lead.source)}</span></td>
+    <td><span class="heat-badge heat-${lead.heat}">${lead.heat === 'Hot' ? '🔥 ' : lead.heat === 'Warm' ? '♨ ' : ''}${lead.heat}</span></td>
+    <td><span class="score-pill">${lead.score}</span></td>
+    <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${time}</td>
+    <td>
+      <div class="action-row">
+        <button class="action-btn" onclick="toggleMsg('${safeId}')">Message</button>
+        <a href="${esc(lead.link||'#')}" target="_blank" rel="noopener" style="text-decoration:none;">
+          <button class="action-btn">View ↗</button>
+        </a>
+        <button class="action-btn ${isPushed?'pushed':''}" id="push-${safeId}" onclick="pushToCRM('${lead.id}')" ${isPushed?'disabled':''}>
+          ${isPushed ? '✓ Sent' : '→ CRM'}
+        </button>
+      </div>
+    </td>
+  </tr>`;
+}
+
+function toggleMsg(safeId) {
+  document.getElementById('msg-'+safeId)?.classList.toggle('open');
+}
+
+function copyMessage(safeId) {
+  const txt = document.getElementById('msgtext-'+safeId);
+  if (!txt) return;
+  navigator.clipboard.writeText(txt.value).then(() => showToast('Message copied to clipboard ✓'));
+}
+
+function openLinkedIn(company) {
+  window.open(`https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(company)}`, '_blank');
+}
+
+// ─── SELECTION ───────────────────────────────────────────────────────────────
+function toggleSelect(id, checked) {
+  if (checked) selected.add(id); else selected.delete(id);
+  updateBulkBar();
+}
+function toggleSelectAll(checked) {
+  filteredLeads.forEach(l => { if (checked) selected.add(l.id); else selected.delete(l.id); });
+  renderLeads(filteredLeads);
+  updateBulkBar();
+}
+function clearSelection() {
+  selected.clear();
+  renderLeads(filteredLeads);
+  updateBulkBar();
+}
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  const n = selected.size;
+  document.getElementById('bulkCount').textContent = `${n} selected`;
+  bar.classList.toggle('show', n > 0);
+}
+
+// ─── CRM PUSH ────────────────────────────────────────────────────────────────
+async function pushToCRM(leadId) {
+  const lead = allLeads.find(l => l.id === leadId);
+  if (!lead) return;
+  const safeId = leadId.replace(/[^a-z0-9_]/gi, '_');
+  const btn = document.getElementById('push-'+safeId);
+  if (btn) { btn.textContent = '...'; btn.disabled = true; }
+
+  try {
+    // Push to Supabase website_leads table
+    const payload = {
+      name: lead.company,
+      email: '',
+      enquiry_type: 'hire',
+      role: lead.title,
+      message: `[Lead Engine]\nSource: ${lead.source}\nLocation: ${lead.location}\nHeat: ${lead.heat} (score: ${lead.score})\nPosted: ${lead.postedAt}\nLink: ${lead.link||''}\n\nSuggested outreach:\n${lead.message}`,
+      source: 'lead_engine',
+      created_at: new Date().toISOString()
+    };
+
+    const res = await fetch(`${CRM_SUPABASE_URL}/rest/v1/website_leads`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': CRM_SUPABASE_KEY,
+        'Authorization': `Bearer ${CRM_SUPABASE_KEY}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok || res.status === 201) {
+      pushedIds.add(leadId);
+      localStorage.setItem('kl_engine_pushed', JSON.stringify([...pushedIds]));
+      if (btn) { btn.textContent = '✓ Sent'; btn.classList.add('pushed'); }
+      document.getElementById('statPushed').textContent = pushedIds.size;
+      showToast(`✓ ${lead.company} pushed to CRM`);
+    } else {
+      const err = await res.text();
+      if (btn) { btn.textContent = '→ CRM'; btn.disabled = false; }
+      showToast('CRM error: ' + (err || res.status));
+    }
+  } catch (err) {
+    if (btn) { btn.textContent = '→ CRM'; btn.disabled = false; }
+    showToast('Push failed: ' + err.message);
+  }
+}
+
+async function pushAllHotToCRM() {
+  const hotLeads = allLeads.filter(l => l.heat === 'Hot' && !pushedIds.has(l.id));
+  if (!hotLeads.length) { showToast('All hot leads already pushed'); return; }
+  showToast(`Pushing ${hotLeads.length} hot leads to CRM...`);
+  for (const lead of hotLeads) {
+    await pushToCRM(lead.id);
+    await new Promise(r => setTimeout(r, 250));
+  }
+  showToast(`Done — ${hotLeads.length} hot leads pushed to CRM`);
+}
+
+async function pushSelectedToCRM() {
+  const ids = [...selected].filter(id => !pushedIds.has(id));
+  if (!ids.length) { showToast('All selected leads already pushed'); return; }
+  showToast(`Pushing ${ids.length} leads...`);
+  for (const id of ids) {
+    await pushToCRM(id);
+    await new Promise(r => setTimeout(r, 250));
+  }
+  clearSelection();
+  showToast(`Done — ${ids.length} leads pushed`);
+}
+
+// ─── EXPORT ──────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const leads = filteredLeads.length ? filteredLeads : allLeads;
+  if (!leads.length) { showToast('No leads to export'); return; }
+  const rows = [
+    ['Company','Role','Location','Source','Heat','Score','Posted','Link','Message','Pushed'],
+    ...leads.map(l => [
+      l.company, l.title, l.location, l.source, l.heat, l.score,
+      l.postedAt, l.link, (l.message||'').replace(/\n/g,' '),
+      pushedIds.has(l.id) ? 'Yes' : 'No'
+    ])
+  ];
+  const csv = rows.map(r => r.map(v => `"${String(v||'').replace(/"/g,"'")}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `kinleague-leads-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('CSV exported ✓');
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const h = Math.floor(diff / 36e5);
+  if (h < 1) return 'Just now';
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+
+function esc(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+</script>
+</body>
+</html>
