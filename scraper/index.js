@@ -3,60 +3,59 @@ const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
 
-const SEARCH_TARGETS = [
-  {
-    name: 'LinkedIn UAE',
-    url: 'https://www.linkedin.com/jobs/search/?keywords=sales+executive&location=Dubai%2C+UAE&f_TPR=r86400&position=1&pageNum=0',
-    type: 'linkedin'
-  },
-  {
-    name: 'LinkedIn Lebanon',
-    url: 'https://www.linkedin.com/jobs/search/?keywords=sales+marketing&location=Lebanon&f_TPR=r86400',
-    type: 'linkedin'
-  },
-  {
-    name: 'LinkedIn BDM',
-    url: 'https://www.linkedin.com/jobs/search/?keywords=business+development+manager&location=United+Arab+Emirates&f_TPR=r86400',
-    type: 'linkedin'
-  },
-  {
-    name: 'Indeed UAE',
-    url: 'https://ae.indeed.com/jobs?q=sales+executive&l=Dubai&fromage=1',
-    type: 'indeed'
-  },
-  {
-    name: 'Indeed Abu Dhabi',
-    url: 'https://ae.indeed.com/jobs?q=sales+manager&l=Abu+Dhabi&fromage=3',
-    type: 'indeed'
-  },
-  {
-    name: 'Bayt',
-    url: 'https://www.bayt.com/en/uae/jobs/sales-executive-jobs/',
-    type: 'bayt'
-  },
-  {
-    name: 'Bayt BDM',
-    url: 'https://www.bayt.com/en/uae/jobs/business-development-manager-jobs/',
-    type: 'bayt'
-  },
-  {
-    name: 'Glassdoor Dubai',
-    url: 'https://www.glassdoor.com/Job/dubai-sales-jobs-SRCH_IL.0,5_IC2204498_KO6,11.htm',
-    type: 'glassdoor'
-  }
-];
-
-const ROLE_KEYWORDS = [
-  'sales executive', 'sales manager', 'business development', 'bdm', 'account executive',
-  'account manager', 'sales director', 'head of sales', 'vp sales', 'vp of sales', 'revenue',
-  'marketing manager', 'marketing director', 'growth manager', 'demand generation',
-  'sdr', 'bdr', 'inside sales', 'regional sales', 'enterprise sales', 'sales lead',
-  'commercial manager', 'revenue manager', 'partnerships manager', 'channel sales'
+// ─── SALES-ONLY FILTER ───────────────────────────────────────────────────────
+const SALES_ROLE_KEYWORDS = [
+  'sales executive','sales manager','sales director','sales lead','head of sales',
+  'vp of sales','vp sales','chief revenue','cro','revenue manager','revenue director',
+  'business development','bdm','bdr','bd manager','bd executive',
+  'sdr','sales development','sales development representative','outbound sales',
+  'inside sales','outbound representative',
+  'account executive','account manager','key account','strategic account','enterprise account',
+  'growth manager','demand generation','performance marketing',
+  'marketing manager','marketing director','head of marketing','digital marketing manager','marketing lead',
+  'pre-sales','presales','solutions consultant','commercial manager','commercial director',
+  'partnerships manager','channel sales','regional sales','territory manager','field sales',
 ];
 
 const EXCLUDE_KEYWORDS = [
-  'developer', 'engineer', 'accountant', 'finance', 'legal', 'hr', 'nurse',
-  'doctor', 'pharmacist', 'teacher', 'driver', 'cleaner', 'security', 'cook'
+  'software engineer','developer','devops','data scientist','data engineer',
+  'machine learning','frontend','backend','fullstack','full stack',
+  'accountant','finance manager','financial analyst','cfo','controller',
+  'lawyer','legal','paralegal','compliance',
+  'doctor','nurse','medical','healthcare','pharmacist',
+  'driver','delivery','logistics','warehouse',
+  'customer service','support agent','help desk',
+  'receptionist','admin assistant','office manager',
+  'hr manager','recruiter','talent acquisition',
+  'designer','graphic','ui ux','ux designer',
+  'content writer','copywriter','seo specialist',
+];
+
+function isSalesRole(title) {
+  const t = title.toLowerCase();
+  if (EXCLUDE_KEYWORDS.some(k => t.includes(k))) return false;
+  return SALES_ROLE_KEYWORDS.some(k => t.includes(k));
+}
+
+// ─── SEARCH TARGETS ──────────────────────────────────────────────────────────
+const SEARCH_TARGETS = [
+  { name:'LinkedIn UAE Sales', url:'https://www.linkedin.com/jobs/search/?keywords=sales+executive+marketing&location=United+Arab+Emirates&f_TPR=r86400&sortBy=DD', type:'linkedin' },
+  { name:'LinkedIn Dubai SDR', url:'https://www.linkedin.com/jobs/search/?keywords=SDR+BDR+sales+development&location=Dubai&f_TPR=r86400', type:'linkedin' },
+  { name:'LinkedIn Lebanon Sales', url:'https://www.linkedin.com/jobs/search/?keywords=sales+marketing+business+development&location=Lebanon&f_TPR=r604800', type:'linkedin' },
+  { name:'LinkedIn UAE Marketing', url:'https://www.linkedin.com/jobs/search/?keywords=marketing+director+growth+manager&location=UAE&f_TPR=r86400', type:'linkedin' },
+  { name:'Indeed UAE Sales', url:'https://ae.indeed.com/jobs?q=sales+executive+marketing+manager&l=Dubai&fromage=1&sort=date', type:'indeed' },
+  { name:'Indeed UAE BDM', url:'https://ae.indeed.com/jobs?q=business+development+manager+SDR&l=UAE&fromage=3', type:'indeed' },
+  { name:'Indeed Lebanon', url:'https://lb.indeed.com/jobs?q=sales+marketing+business+development&fromage=7&sort=date', type:'indeed' },
+  { name:'Bayt UAE Sales', url:'https://www.bayt.com/en/uae/jobs/sales-executive-jobs/', type:'bayt' },
+  { name:'Bayt UAE Marketing', url:'https://www.bayt.com/en/uae/jobs/marketing-manager-jobs/', type:'bayt' },
+  { name:'Bayt Lebanon Sales', url:'https://www.bayt.com/en/lebanon/jobs/sales-manager-jobs/', type:'bayt' },
+  { name:'Bayt BDM', url:'https://www.bayt.com/en/uae/jobs/business-development-manager-jobs/', type:'bayt' },
+  { name:'Glassdoor Dubai Sales', url:'https://www.glassdoor.com/Job/dubai-sales-jobs-SRCH_IL.0,5_IC2204498_KO6,11_IP1.htm', type:'glassdoor' },
+  { name:'NaukriGulf Sales UAE', url:'https://www.naukrigulf.com/sales-jobs-in-uae', type:'naukrigulf' },
+  { name:'NaukriGulf Marketing', url:'https://www.naukrigulf.com/marketing-jobs-in-uae', type:'naukrigulf' },
+  { name:'GulfTalent Sales', url:'https://www.gulftalent.com/jobs/sales-jobs', type:'gulftalent' },
+  { name:'Wuzzuf Sales', url:'https://wuzzuf.net/search/jobs/?q=sales+executive+marketing&a=hpb', type:'wuzzuf' },
+  { name:'RemoteOK Sales', url:'https://remoteok.com/remote-sales-jobs.json', type:'remoteok' },
 ];
 
 const UA_LIST = [
@@ -66,9 +65,31 @@ const UA_LIST = [
 ];
 
 function randomUA() { return UA_LIST[Math.floor(Math.random() * UA_LIST.length)]; }
-
 async function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// ─── CONTACT ENRICHMENT ──────────────────────────────────────────────────────
+const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const PHONE_RE = /(\+?\d[\d\s\-().]{7,}\d)/g;
+const EMAIL_BLOCKLIST = ['noreply','no-reply','example.com','sentry','cloudflare','wix.com','sendgrid','mailchimp'];
+
+async function enrichContactInfo(lead) {
+  // Skip LinkedIn/Indeed — they block scraping job detail pages
+  if (!lead.link || lead.link.includes('linkedin.com') || lead.link.includes('indeed.com') || lead.link === '#') return lead;
+  try {
+    await delay(500 + Math.random() * 500);
+    const { data } = await axios.get(lead.link, {
+      headers: { 'User-Agent': randomUA(), 'Accept-Language': 'en-US,en;q=0.9' },
+      timeout: 8000
+    });
+    const emails = (data.match(EMAIL_RE) || []).filter(e => !EMAIL_BLOCKLIST.some(b => e.includes(b)));
+    const phones = (data.match(PHONE_RE) || []).filter(p => p.replace(/\D/g,'').length >= 7);
+    if (emails.length) lead.contactEmail = emails[0];
+    if (phones.length) lead.contactPhone = phones[0].trim();
+  } catch {}
+  return lead;
+}
+
+// ─── SCRAPERS ────────────────────────────────────────────────────────────────
 async function scrapeLinkedIn(url, sourceName) {
   try {
     await delay(1000 + Math.random() * 1000);
@@ -92,13 +113,11 @@ async function scrapeLinkedIn(url, sourceName) {
       const link = $(el).find('a.base-card__full-link, a').first().attr('href') || '';
 
       if (!title || !company) return;
-      if (EXCLUDE_KEYWORDS.some(k => title.toLowerCase().includes(k))) return;
-      if (!ROLE_KEYWORDS.some(k => title.toLowerCase().includes(k))) return;
+      if (!isSalesRole(title)) return;
 
       leads.push({ title, company, location: location || 'UAE', postedAt: time, link: link.split('?')[0], source: 'LinkedIn' });
     });
 
-    // Also try JSON-LD embedded data
     $('script[type="application/ld+json"]').each((i, el) => {
       try {
         const json = JSON.parse($(el).html());
@@ -106,7 +125,7 @@ async function scrapeLinkedIn(url, sourceName) {
           const title = json.title || '';
           const company = json.hiringOrganization?.name || '';
           const location = json.jobLocation?.address?.addressLocality || 'UAE';
-          if (title && company && ROLE_KEYWORDS.some(k => title.toLowerCase().includes(k))) {
+          if (title && company && isSalesRole(title)) {
             leads.push({ title, company, location, postedAt: json.datePosted || new Date().toISOString(), link: json.url || url, source: 'LinkedIn' });
           }
         }
@@ -135,7 +154,6 @@ async function scrapeIndeed(url, sourceName) {
     const $ = cheerio.load(data);
     const leads = [];
 
-    // Try multiple selectors for Indeed
     const selectors = ['[data-jk]', '.job_seen_beacon', '.tapItem'];
     for (const sel of selectors) {
       $(sel).each((i, el) => {
@@ -147,8 +165,7 @@ async function scrapeIndeed(url, sourceName) {
         const link = jk ? `https://ae.indeed.com/viewjob?jk=${jk}` : '';
 
         if (!title || !company) return;
-        if (EXCLUDE_KEYWORDS.some(k => title.toLowerCase().includes(k))) return;
-        if (!ROLE_KEYWORDS.some(k => title.toLowerCase().includes(k))) return;
+        if (!isSalesRole(title)) return;
 
         leads.push({ title, company, location: location || 'UAE', postedAt: new Date().toISOString(), link, source: 'Indeed' });
       });
@@ -167,16 +184,12 @@ async function scrapeBayt(url, sourceName) {
   try {
     await delay(1000 + Math.random() * 1000);
     const { data } = await axios.get(url, {
-      headers: {
-        'User-Agent': randomUA(),
-        'Accept-Language': 'en-US,en;q=0.9'
-      },
+      headers: { 'User-Agent': randomUA(), 'Accept-Language': 'en-US,en;q=0.9' },
       timeout: 15000
     });
     const $ = cheerio.load(data);
     const leads = [];
 
-    // Bayt uses multiple layouts
     $('[data-job-id], .has-pointer-d, li[id*="post"]').each((i, el) => {
       const title = $(el).find('h2 a, h3 a, .jb-title, [class*="title"] a').first().text().trim();
       const company = $(el).find('[class*="company"], [class*="employer"], .jb-company').first().text().trim();
@@ -185,8 +198,8 @@ async function scrapeBayt(url, sourceName) {
       const link = href.startsWith('http') ? href : `https://www.bayt.com${href}`;
 
       if (!title || !company) return;
-      if (EXCLUDE_KEYWORDS.some(k => title.toLowerCase().includes(k))) return;
-      // Bayt: accept if title has any sales-adjacent keyword OR is from a sales category page
+      if (!isSalesRole(title)) return;
+
       leads.push({ title, company, location: location || 'UAE', postedAt: new Date().toISOString(), link, source: 'Bayt' });
     });
 
@@ -202,10 +215,7 @@ async function scrapeGlassdoor(url, sourceName) {
   try {
     await delay(1500 + Math.random() * 1000);
     const { data } = await axios.get(url, {
-      headers: {
-        'User-Agent': randomUA(),
-        'Accept-Language': 'en-US,en;q=0.9'
-      },
+      headers: { 'User-Agent': randomUA(), 'Accept-Language': 'en-US,en;q=0.9' },
       timeout: 15000
     });
     const $ = cheerio.load(data);
@@ -219,8 +229,7 @@ async function scrapeGlassdoor(url, sourceName) {
       const link = href.startsWith('http') ? href : `https://www.glassdoor.com${href}`;
 
       if (!title || !company) return;
-      if (EXCLUDE_KEYWORDS.some(k => title.toLowerCase().includes(k))) return;
-      if (!ROLE_KEYWORDS.some(k => title.toLowerCase().includes(k))) return;
+      if (!isSalesRole(title)) return;
 
       leads.push({ title, company, location: location || 'Dubai', postedAt: new Date().toISOString(), link, source: 'Glassdoor' });
     });
@@ -233,7 +242,134 @@ async function scrapeGlassdoor(url, sourceName) {
   }
 }
 
-// Add realistic demo leads when scraping is blocked (bot detection)
+async function scrapeNaukriGulf(url, sourceName) {
+  try {
+    await delay(1000 + Math.random() * 1000);
+    const { data } = await axios.get(url, {
+      headers: { 'User-Agent': randomUA(), 'Accept-Language': 'en-US,en;q=0.9' },
+      timeout: 15000
+    });
+    const $ = cheerio.load(data);
+    const leads = [];
+
+    $('[class*="jobTuple"], [class*="job-card"], article[class*="job"]').each((i, el) => {
+      const title = $(el).find('[class*="title"], h3, h2').first().text().trim();
+      const company = $(el).find('[class*="company"], [class*="employer"]').first().text().trim();
+      const location = $(el).find('[class*="location"], [class*="loc"]').first().text().trim();
+      const href = $(el).find('a').first().attr('href') || '';
+      const link = href.startsWith('http') ? href : `https://www.naukrigulf.com${href}`;
+
+      if (!title || !company) return;
+      if (!isSalesRole(title)) return;
+
+      leads.push({ title, company, location: location || 'UAE', postedAt: new Date().toISOString(), link, source: 'NaukriGulf' });
+    });
+
+    console.log(`  [${sourceName}] → ${leads.length} leads`);
+    return leads;
+  } catch (err) {
+    console.error(`  [${sourceName}] Error: ${err.message}`);
+    return [];
+  }
+}
+
+async function scrapeGulfTalent(url, sourceName) {
+  try {
+    await delay(1000 + Math.random() * 1000);
+    const { data } = await axios.get(url, {
+      headers: { 'User-Agent': randomUA(), 'Accept-Language': 'en-US,en;q=0.9' },
+      timeout: 15000
+    });
+    const $ = cheerio.load(data);
+    const leads = [];
+
+    $('[class*="job"], article, .listing').each((i, el) => {
+      const title = $(el).find('h2, h3, [class*="title"]').first().text().trim();
+      const company = $(el).find('[class*="company"], [class*="employer"]').first().text().trim();
+      const location = $(el).find('[class*="location"], [class*="loc"]').first().text().trim();
+      const href = $(el).find('a').first().attr('href') || '';
+      const link = href.startsWith('http') ? href : `https://www.gulftalent.com${href}`;
+
+      if (!title || !company || title.length < 5) return;
+      if (!isSalesRole(title)) return;
+
+      leads.push({ title, company, location: location || 'UAE', postedAt: new Date().toISOString(), link, source: 'GulfTalent' });
+    });
+
+    console.log(`  [${sourceName}] → ${leads.length} leads`);
+    return leads;
+  } catch (err) {
+    console.error(`  [${sourceName}] Error: ${err.message}`);
+    return [];
+  }
+}
+
+async function scrapeWuzzuf(url, sourceName) {
+  try {
+    await delay(1000 + Math.random() * 1000);
+    const { data } = await axios.get(url, {
+      headers: { 'User-Agent': randomUA(), 'Accept-Language': 'en-US,en;q=0.9' },
+      timeout: 15000
+    });
+    const $ = cheerio.load(data);
+    const leads = [];
+
+    $('[class*="job-card"], article[class*="job"], [data-id]').each((i, el) => {
+      const title = $(el).find('h2, h3, [class*="title"]').first().text().trim();
+      const company = $(el).find('[class*="company"]').first().text().trim();
+      const location = $(el).find('[class*="location"], [class*="city"]').first().text().trim();
+      const href = $(el).find('a').first().attr('href') || '';
+      const link = href.startsWith('http') ? href : `https://wuzzuf.net${href}`;
+
+      if (!title || !company || title.length < 5) return;
+      if (!isSalesRole(title)) return;
+
+      leads.push({ title, company, location: location || 'Egypt', postedAt: new Date().toISOString(), link, source: 'Wuzzuf' });
+    });
+
+    console.log(`  [${sourceName}] → ${leads.length} leads`);
+    return leads;
+  } catch (err) {
+    console.error(`  [${sourceName}] Error: ${err.message}`);
+    return [];
+  }
+}
+
+async function scrapeRemoteOK(url, sourceName) {
+  try {
+    await delay(1000 + Math.random() * 500);
+    const { data } = await axios.get(url, {
+      headers: { 'User-Agent': randomUA(), 'Accept': 'application/json' },
+      timeout: 15000
+    });
+    const jobs = Array.isArray(data) ? data.slice(1) : []; // first element is metadata
+    const leads = [];
+
+    for (const job of jobs) {
+      const title = job.position || '';
+      const company = job.company || '';
+      if (!title || !company) continue;
+      if (!isSalesRole(title)) continue;
+
+      leads.push({
+        title,
+        company,
+        location: job.location || 'Remote',
+        postedAt: job.date ? new Date(job.date * 1000).toISOString() : new Date().toISOString(),
+        link: job.url || `https://remoteok.com/remote-jobs/${job.id}`,
+        source: 'RemoteOK'
+      });
+    }
+
+    console.log(`  [${sourceName}] → ${leads.length} leads`);
+    return leads;
+  } catch (err) {
+    console.error(`  [${sourceName}] Error: ${err.message}`);
+    return [];
+  }
+}
+
+// ─── DEMO DATA ───────────────────────────────────────────────────────────────
 function getDemoLeads() {
   return [
     { title: 'Sales Executive', company: 'Noon.com', location: 'Dubai, UAE', source: 'LinkedIn', postedAt: new Date(Date.now() - 2*3600000).toISOString(), link: 'https://www.linkedin.com/jobs/', funded: true },
@@ -259,30 +395,26 @@ function getDemoLeads() {
   ];
 }
 
+// ─── SCORING & MESSAGING ─────────────────────────────────────────────────────
 function scoreLead(lead) {
   let score = 0;
   const titleLower = lead.title.toLowerCase();
 
-  // Role seniority
   if (titleLower.includes('head') || titleLower.includes('director') || titleLower.includes('vp') || titleLower.includes('chief')) score += 30;
   else if (titleLower.includes('manager') || titleLower.includes('executive') || titleLower.includes('lead')) score += 20;
   else score += 10;
 
-  // Recency
   const hoursAgo = (Date.now() - new Date(lead.postedAt).getTime()) / 3600000;
   if (hoursAgo < 6) score += 40;
   else if (hoursAgo < 24) score += 30;
   else if (hoursAgo < 48) score += 20;
   else if (hoursAgo < 72) score += 10;
 
-  // Source quality
   if (lead.source === 'LinkedIn') score += 10;
   else if (lead.source === 'Glassdoor') score += 8;
 
-  // Funded company bonus
   if (lead.funded) score += 25;
 
-  // Keyword bonuses
   if (titleLower.includes('enterprise') || titleLower.includes('strategic')) score += 10;
   if (titleLower.includes('regional') || titleLower.includes('head')) score += 5;
 
@@ -303,6 +435,7 @@ function generateMessage(lead) {
   return templates[lead.heat] || templates.Warm;
 }
 
+// ─── MAIN ────────────────────────────────────────────────────────────────────
 async function runScraper() {
   console.log('🔍 Starting Kinleague Lead Engine...\n');
   let allLeads = [];
@@ -312,21 +445,25 @@ async function runScraper() {
     console.log(`Scraping ${target.name}...`);
     let leads = [];
     if (target.type === 'linkedin') leads = await scrapeLinkedIn(target.url, target.name);
-    if (target.type === 'indeed') leads = await scrapeIndeed(target.url, target.name);
-    if (target.type === 'bayt') leads = await scrapeBayt(target.url, target.name);
-    if (target.type === 'glassdoor') leads = await scrapeGlassdoor(target.url, target.name);
+    else if (target.type === 'indeed') leads = await scrapeIndeed(target.url, target.name);
+    else if (target.type === 'bayt') leads = await scrapeBayt(target.url, target.name);
+    else if (target.type === 'glassdoor') leads = await scrapeGlassdoor(target.url, target.name);
+    else if (target.type === 'naukrigulf') leads = await scrapeNaukriGulf(target.url, target.name);
+    else if (target.type === 'gulftalent') leads = await scrapeGulfTalent(target.url, target.name);
+    else if (target.type === 'wuzzuf') leads = await scrapeWuzzuf(target.url, target.name);
+    else if (target.type === 'remoteok') leads = await scrapeRemoteOK(target.url, target.name);
     liveCount += leads.length;
     allLeads = [...allLeads, ...leads];
   }
 
-  // If very few live results (bot-blocked), supplement with realistic demo data
+  // Supplement with demo if not enough live results
   if (liveCount < 5) {
     console.log('\n⚠  Live scraping returned few results (sites may be blocking bots).');
     console.log('   Supplementing with realistic demo leads...\n');
     allLeads = [...allLeads, ...getDemoLeads()];
   }
 
-  // Deduplicate by company + title
+  // Deduplicate
   const seen = new Set();
   allLeads = allLeads.filter(l => {
     const key = `${l.company}|${l.title}`.toLowerCase();
@@ -335,7 +472,7 @@ async function runScraper() {
     return true;
   });
 
-  // Score, generate messages, add IDs
+  // Score and generate messages first
   allLeads = allLeads.map(lead => {
     lead = scoreLead(lead);
     lead.message = generateMessage(lead);
@@ -345,18 +482,28 @@ async function runScraper() {
     return lead;
   });
 
-  // Sort: Hot first, then by score
+  // Contact enrichment (parallel batches of 3 to avoid overwhelming)
+  console.log('\n📧 Enriching contact info...');
+  const batchSize = 3;
+  for (let i = 0; i < allLeads.length; i += batchSize) {
+    const batch = allLeads.slice(i, i + batchSize);
+    await Promise.all(batch.map(lead => enrichContactInfo(lead)));
+  }
+  const withEmail = allLeads.filter(l => l.contactEmail).length;
+  console.log(`   Found emails for ${withEmail} leads`);
+
+  // Sort by score
   allLeads.sort((a, b) => b.score - a.score);
 
-  // Save to JSON (at project root)
+  // Save JSON
   const outPath = path.join(__dirname, '..', 'leads.json');
   fs.writeFileSync(outPath, JSON.stringify(allLeads, null, 2));
 
   // Save CSV
   const csv = [
-    'Company,Title,Location,Source,Heat,Score,Posted,Link,Message',
+    'Company,Title,Location,Source,Heat,Score,Posted,Link,Email,Phone,Message',
     ...allLeads.map(l =>
-      `"${l.company}","${l.title}","${l.location}","${l.source}","${l.heat}","${l.score}","${l.postedAt}","${l.link}","${(l.message||'').replace(/"/g, "'")}"`
+      `"${l.company}","${l.title}","${l.location}","${l.source}","${l.heat}","${l.score}","${l.postedAt}","${l.link||''}","${l.contactEmail||''}","${l.contactPhone||''}","${(l.message||'').replace(/"/g, "'")}"`
     )
   ].join('\n');
   const csvPath = path.join(__dirname, '..', 'leads.csv');
@@ -366,6 +513,7 @@ async function runScraper() {
   console.log(`   🔥 Hot:  ${allLeads.filter(l => l.heat === 'Hot').length}`);
   console.log(`   ♨  Warm: ${allLeads.filter(l => l.heat === 'Warm').length}`);
   console.log(`   🔵 Cold: ${allLeads.filter(l => l.heat === 'Cold').length}`);
+  console.log(`   📧 Email: ${withEmail}`);
 
   return allLeads;
 }

@@ -62,7 +62,7 @@
   /* Stats */
   .stats-bar {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     background: var(--white);
     border-bottom: 1px solid var(--border);
   }
@@ -348,6 +348,10 @@
     <div class="stat-num pushed" id="statPushed">0</div>
     <div class="stat-label">Pushed to CRM</div>
   </div>
+  <div class="stat-card">
+    <div class="stat-num" id="statContacts" style="color:#16a34a;">—</div>
+    <div class="stat-label">Have Email</div>
+  </div>
 </div>
 
 <div class="toolbar">
@@ -358,6 +362,7 @@
     <button class="tab" onclick="filterLeads('Cold', this)">Cold</button>
     <button class="tab" onclick="filterLeads('new', this)">New 24h</button>
     <button class="tab" onclick="filterLeads('pushed', this)">Pushed</button>
+    <button class="tab" onclick="filterLeads('has_contact', this)">📧 Has Contact</button>
   </div>
   <input type="text" class="search-input" id="searchInput" placeholder="Search company, role, location..." oninput="searchLeads(this.value)">
   <span class="results-count" id="resultsCount"></span>
@@ -384,6 +389,113 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Lead Preview Drawer -->
+<div id="drawerOverlay" onclick="closeDrawer()"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4);
+  z-index:900; backdrop-filter:blur(2px);"></div>
+
+<div id="leadDrawer"
+  style="display:none; position:fixed; top:0; right:0; width:480px; height:100vh;
+  background:#faf8f4; z-index:901; overflow-y:auto; box-shadow:-8px 0 40px rgba(0,0,0,0.15);
+  transform:translateX(100%); transition:transform 0.32s cubic-bezier(0.16,1,0.3,1);">
+
+  <div style="background:#080809; padding:20px 24px; position:sticky; top:0; z-index:10;
+    display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <div id="drawerCompany"
+        style="font-family:'DM Mono',monospace; font-size:15px; color:#f0eeeb; font-weight:500;"></div>
+      <div id="drawerRole"
+        style="font-size:12px; color:rgba(240,238,235,0.45); margin-top:3px;"></div>
+    </div>
+    <button onclick="closeDrawer()"
+      style="background:rgba(255,255,255,0.08); border:none; color:#f0eeeb;
+      width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:18px;
+      display:flex; align-items:center; justify-content:center;">×</button>
+  </div>
+
+  <div id="drawerHeatBar"
+    style="padding:12px 24px; display:flex; align-items:center; gap:10px;
+    border-bottom:1px solid rgba(0,0,0,0.06);">
+    <span id="drawerHeatBadge" style="font-family:'DM Mono',monospace; font-size:11px;
+      padding:4px 12px; border-radius:20px; text-transform:uppercase; letter-spacing:0.06em;"></span>
+    <span id="drawerScore" style="font-size:12px; color:#6b6560;"></span>
+    <span id="drawerSource" style="font-size:11px; background:#f0ece3;
+      padding:3px 10px; border-radius:4px; border:1px solid rgba(0,0,0,0.08);
+      font-family:'DM Mono',monospace; color:#6b6560; margin-left:auto;"></span>
+  </div>
+
+  <div id="drawerContacts" style="padding:20px 24px; border-bottom:1px solid rgba(0,0,0,0.06);">
+    <div style="font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em;
+      text-transform:uppercase; color:#6b6560; margin-bottom:12px;">Contact Information</div>
+    <div id="contactLoading" style="display:flex; align-items:center; gap:8px; color:#6b6560; font-size:13px;">
+      <div class="spinner spinner-dark"></div> Finding contact details...
+    </div>
+    <div id="contactDetails" style="display:none;"></div>
+    <div id="contactNotFound" style="display:none; font-size:13px; color:#6b6560;">
+      Contact details not publicly available —
+      <a id="drawerLinkedInSearch" href="#" target="_blank"
+        style="color:#c8b89a; text-decoration:none;">Search on LinkedIn ↗</a>
+    </div>
+  </div>
+
+  <div id="drawerDetails" style="padding:20px 24px; border-bottom:1px solid rgba(0,0,0,0.06);">
+    <div style="font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em;
+      text-transform:uppercase; color:#6b6560; margin-bottom:12px;">Job Details</div>
+    <div id="drawerMeta" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"></div>
+  </div>
+
+  <div style="padding:20px 24px; border-bottom:1px solid rgba(0,0,0,0.06);">
+    <div style="font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em;
+      text-transform:uppercase; color:#6b6560; margin-bottom:12px;">Suggested Outreach</div>
+    <div style="position:relative;">
+      <div id="drawerMessage"
+        style="background:#f0ece3; border:1px solid rgba(0,0,0,0.08); border-radius:8px;
+        padding:14px 44px 14px 14px; font-size:13px; line-height:1.7; color:#1a1814;
+        white-space:pre-wrap; min-height:80px;"></div>
+      <button onclick="copyDrawerMessage()" id="copyMsgBtn"
+        style="position:absolute; top:10px; right:10px; background:#faf8f4;
+        border:1px solid rgba(0,0,0,0.1); border-radius:5px; padding:4px 10px;
+        font-size:11px; cursor:pointer; color:#6b6560; font-family:'DM Mono',monospace;">Copy</button>
+    </div>
+    <div id="drawerEmailDraft" style="margin-top:10px; display:none;">
+      <div style="font-size:11px; color:#6b6560; margin-bottom:6px;">Email subject line:</div>
+      <div id="drawerSubject"
+        style="background:#f0ece3; border:1px solid rgba(0,0,0,0.08); border-radius:6px;
+        padding:10px 14px; font-size:13px; color:#1a1814; font-family:'DM Mono',monospace;"></div>
+    </div>
+  </div>
+
+  <div style="padding:20px 24px; display:flex; flex-direction:column; gap:10px;">
+    <button id="drawerPushBtn" onclick="pushCurrentLead()"
+      style="width:100%; padding:13px; background:#080809; color:#f0eeeb; border:none;
+      border-radius:8px; font-family:'DM Mono',monospace; font-size:12px;
+      letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; transition:opacity 0.15s;">
+      → Push to Kinleague CRM
+    </button>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <button onclick="copyDrawerMessage()"
+        style="padding:11px; background:transparent; border:1px solid rgba(0,0,0,0.12);
+        border-radius:8px; font-family:'DM Mono',monospace; font-size:11px;
+        letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; color:#6b6560;">
+        Copy Message
+      </button>
+      <button onclick="openEmailClient()"
+        style="padding:11px; background:#c8b89a; border:none;
+        border-radius:8px; font-family:'DM Mono',monospace; font-size:11px;
+        letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; color:#080809;">
+        Open in Email
+      </button>
+    </div>
+    <button onclick="markDrawerContacted()"
+      style="width:100%; padding:11px; background:transparent;
+      border:1px solid rgba(0,0,0,0.12); border-radius:8px;
+      font-family:'DM Mono',monospace; font-size:11px;
+      letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; color:#6b6560;">
+      ✓ Mark as Contacted
+    </button>
+  </div>
+</div>
+
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CRM_SUPABASE_URL = 'https://babhsufcvybimxysgvwb.supabase.co';
@@ -396,6 +508,8 @@ let currentFilter = 'all';
 let currentSearch = '';
 let selected = new Set();
 let pushedIds = new Set(JSON.parse(localStorage.getItem('kl_engine_pushed') || '[]'));
+let contactedIds = new Set(JSON.parse(localStorage.getItem('kl_engine_contacted') || '[]'));
+let currentDrawerLead = null;
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
@@ -538,6 +652,7 @@ function applyFilters(filter, search) {
   if (filter === 'Hot' || filter === 'Warm' || filter === 'Cold') leads = leads.filter(l => l.heat === filter);
   if (filter === 'new') { const y = Date.now() - 86400000; leads = leads.filter(l => new Date(l.scrapedAt||l.postedAt).getTime() > y); }
   if (filter === 'pushed') leads = leads.filter(l => pushedIds.has(l.id));
+  if (filter === 'has_contact') leads = leads.filter(l => l.contactEmail || l.contactPhone);
   if (search) leads = leads.filter(l => (l.company+' '+l.title+' '+l.location).toLowerCase().includes(search));
   filteredLeads = leads;
   renderLeads(leads);
@@ -551,6 +666,7 @@ function updateStats() {
   const y = Date.now() - 86400000;
   document.getElementById('statNew').textContent = allLeads.filter(l => new Date(l.scrapedAt||l.postedAt).getTime() > y).length;
   document.getElementById('statPushed').textContent = pushedIds.size;
+  document.getElementById('statContacts').textContent = allLeads.filter(l => l.contactEmail || l.contactPhone).length;
 }
 
 function renderLeads(leads) {
@@ -576,54 +692,32 @@ function renderLeads(leads) {
 
 function renderRow(lead) {
   const isPushed = pushedIds.has(lead.id);
-  const isSelected = selected.has(lead.id);
-  const time = timeAgo(lead.postedAt);
+  const isContacted = contactedIds.has(lead.id);
   const safeId = lead.id.replace(/[^a-z0-9_]/gi, '_');
 
-  return `<tr id="row-${safeId}">
-    <td style="width:36px;"><input type="checkbox" ${isSelected?'checked':''} onchange="toggleSelect('${lead.id}', this.checked)" style="cursor:pointer;"></td>
-    <td>
-      <div class="company-name">${esc(lead.company)}</div>
-      <div class="role-title">${esc(lead.title)}</div>
-      <div class="msg-panel" id="msg-${safeId}">
-        <textarea class="msg-editable" id="msgtext-${safeId}" rows="3">${esc(lead.message)}</textarea>
-        <div class="msg-actions">
-          <button class="copy-btn" onclick="copyMessage('${safeId}')">Copy message</button>
-          <button class="copy-btn" onclick="openLinkedIn('${esc(lead.company)}')">Search on LinkedIn ↗</button>
-        </div>
-      </div>
+  return `<tr id="row-${safeId}"
+    onclick="openDrawer('${lead.id}')"
+    style="cursor:pointer; ${isContacted ? 'opacity:0.45;' : ''}"
+    >
+    <td onclick="event.stopPropagation()" style="width:36px;">
+      <input type="checkbox" ${selected.has(lead.id)?'checked':''} onchange="toggleSelect('${lead.id}', this.checked)" style="cursor:pointer;">
     </td>
-    <td style="color:var(--muted);font-size:12px;">${esc(lead.location)}</td>
+    <td>
+      <div style="font-weight:600; color:#1a1814; font-size:13px;">${esc(lead.company)}</div>
+      <div style="color:#6b6560; font-size:12px; margin-top:2px;">${esc(lead.title)}</div>
+      ${lead.contactEmail ? `<div style="font-size:11px; color:#c8b89a; margin-top:3px; font-family:'DM Mono',monospace;">${esc(lead.contactEmail)}</div>` : ''}
+    </td>
+    <td style="color:#6b6560; font-size:12px;">${esc(lead.location)}</td>
     <td><span class="source-tag">${esc(lead.source)}</span></td>
     <td><span class="heat-badge heat-${lead.heat}">${lead.heat === 'Hot' ? '🔥 ' : lead.heat === 'Warm' ? '♨ ' : ''}${lead.heat}</span></td>
-    <td><span class="score-pill">${lead.score}</span></td>
-    <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${time}</td>
-    <td>
-      <div class="action-row">
-        <button class="action-btn" onclick="toggleMsg('${safeId}')">Message</button>
-        <a href="${esc(lead.link||'#')}" target="_blank" rel="noopener" style="text-decoration:none;">
-          <button class="action-btn">View ↗</button>
-        </a>
-        <button class="action-btn ${isPushed?'pushed':''}" id="push-${safeId}" onclick="pushToCRM('${lead.id}')" ${isPushed?'disabled':''}>
-          ${isPushed ? '✓ Sent' : '→ CRM'}
-        </button>
-      </div>
+    <td style="font-family:'DM Mono',monospace; font-size:12px; color:#6b6560;">${lead.score}</td>
+    <td style="font-size:12px; color:#6b6560; white-space:nowrap;">${timeAgo(lead.postedAt)}</td>
+    <td onclick="event.stopPropagation()">
+      <button class="action-btn ${isPushed?'pushed':''}" id="push-${safeId}" onclick="pushToCRM('${lead.id}')" ${isPushed?'disabled':''}>
+        ${isPushed ? '✓ CRM' : '→ CRM'}
+      </button>
     </td>
   </tr>`;
-}
-
-function toggleMsg(safeId) {
-  document.getElementById('msg-'+safeId)?.classList.toggle('open');
-}
-
-function copyMessage(safeId) {
-  const txt = document.getElementById('msgtext-'+safeId);
-  if (!txt) return;
-  navigator.clipboard.writeText(txt.value).then(() => showToast('Message copied to clipboard ✓'));
-}
-
-function openLinkedIn(company) {
-  window.open(`https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(company)}`, '_blank');
 }
 
 // ─── SELECTION ───────────────────────────────────────────────────────────────
@@ -758,6 +852,155 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+// ─── DRAWER ──────────────────────────────────────────────────────────────────
+function openDrawer(leadId) {
+  const lead = allLeads.find(l => l.id === leadId);
+  if (!lead) return;
+  currentDrawerLead = lead;
+
+  document.getElementById('drawerCompany').textContent = lead.company;
+  document.getElementById('drawerRole').textContent = lead.title + ' · ' + lead.location;
+
+  const heatBadge = document.getElementById('drawerHeatBadge');
+  heatBadge.textContent = (lead.heat === 'Hot' ? '🔥 ' : lead.heat === 'Warm' ? '♨ ' : '') + lead.heat;
+  const heatStyles = { Hot:'background:rgba(220,38,38,0.12); color:#dc2626;', Warm:'background:rgba(217,119,6,0.12); color:#d97706;', Cold:'background:rgba(37,99,235,0.12); color:#2563eb;' };
+  heatBadge.style.cssText = heatStyles[lead.heat] || heatStyles.Warm;
+  document.getElementById('drawerScore').textContent = 'Score: ' + lead.score;
+  document.getElementById('drawerSource').textContent = lead.source;
+
+  const meta = document.getElementById('drawerMeta');
+  meta.innerHTML = [
+    { label:'Location', value: lead.location || '—' },
+    { label:'Source', value: lead.source },
+    { label:'Posted', value: timeAgo(lead.postedAt) },
+    { label:'Category', value: 'Sales & Marketing' },
+    { label:'Company Size', value: lead.companySize || 'Unknown' },
+    { label:'Funding', value: lead.funded ? '✓ Funded startup' : 'Unknown' }
+  ].map(item => `
+    <div style="background:#f0ece3; border-radius:6px; padding:10px 12px;">
+      <div style="font-size:10px; color:#6b6560; font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:3px;">${item.label}</div>
+      <div style="font-size:13px; color:#1a1814; font-weight:500;">${item.value}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('drawerMessage').textContent = lead.message || '';
+
+  if (lead.contactEmail) {
+    document.getElementById('drawerSubject').textContent = `${lead.company} — Sales Talent, 72hr Shortlist`;
+    document.getElementById('drawerEmailDraft').style.display = 'block';
+  } else {
+    document.getElementById('drawerEmailDraft').style.display = 'none';
+  }
+
+  const pushBtn = document.getElementById('drawerPushBtn');
+  if (pushedIds.has(leadId)) {
+    pushBtn.textContent = '✓ Already in CRM';
+    pushBtn.style.opacity = '0.5';
+    pushBtn.disabled = true;
+  } else {
+    pushBtn.textContent = '→ Push to Kinleague CRM';
+    pushBtn.style.opacity = '1';
+    pushBtn.disabled = false;
+  }
+
+  loadContactInfo(lead);
+
+  document.getElementById('drawerOverlay').style.display = 'block';
+  const drawer = document.getElementById('leadDrawer');
+  drawer.style.display = 'block';
+  if (window.innerWidth < 600) drawer.style.width = '100vw';
+  requestAnimationFrame(() => { drawer.style.transform = 'translateX(0)'; });
+}
+
+function closeDrawer() {
+  const drawer = document.getElementById('leadDrawer');
+  drawer.style.transform = 'translateX(100%)';
+  setTimeout(() => {
+    drawer.style.display = 'none';
+    document.getElementById('drawerOverlay').style.display = 'none';
+  }, 320);
+  currentDrawerLead = null;
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+function loadContactInfo(lead) {
+  document.getElementById('contactLoading').style.display = 'flex';
+  document.getElementById('contactDetails').style.display = 'none';
+  document.getElementById('contactNotFound').style.display = 'none';
+
+  setTimeout(() => {
+    document.getElementById('contactLoading').style.display = 'none';
+    const email = lead.contactEmail || lead.email || null;
+    const phone = lead.contactPhone || lead.phone || null;
+    const name = lead.hiringManager || lead.contactName || null;
+    const linkedinUrl = lead.linkedinUrl || lead.hiringManagerLinkedin || null;
+
+    if (email || phone || name) {
+      document.getElementById('contactDetails').style.display = 'block';
+      document.getElementById('contactDetails').innerHTML = `
+        ${name ? `<div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid rgba(0,0,0,0.06);">
+          <div style="width:36px; height:36px; border-radius:50%; background:rgba(200,184,154,0.2); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; color:#8a7550; flex-shrink:0;">${name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+          <div><div style="font-size:13px; font-weight:500; color:#1a1814;">${esc(name)}</div><div style="font-size:11px; color:#6b6560;">Hiring Manager</div></div>
+          ${linkedinUrl ? `<a href="${esc(linkedinUrl)}" target="_blank" style="margin-left:auto; font-size:11px; color:#c8b89a; text-decoration:none; font-family:'DM Mono',monospace;">LinkedIn ↗</a>` : ''}
+        </div>` : ''}
+        ${email ? `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid rgba(0,0,0,0.06);">
+          <div><div style="font-size:10px; color:#6b6560; font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:3px;">Email</div><div style="font-size:13px; color:#1a1814;">${esc(email)}</div></div>
+          <div style="display:flex; gap:6px;">
+            <button onclick="navigator.clipboard.writeText('${esc(email)}').then(()=>showToast('Email copied ✓'))" style="font-size:11px; padding:5px 10px; border-radius:5px; border:1px solid rgba(0,0,0,0.1); background:transparent; cursor:pointer; color:#6b6560; font-family:'DM Mono',monospace;">Copy</button>
+            <a href="mailto:${esc(email)}?subject=${encodeURIComponent(lead.company + ' — Sales Talent Placement')}&body=${encodeURIComponent(lead.message || '')}" style="text-decoration:none;"><button style="font-size:11px; padding:5px 10px; border-radius:5px; border:none; background:#c8b89a; cursor:pointer; color:#080809; font-family:'DM Mono',monospace;">Email ↗</button></a>
+          </div>
+        </div>` : ''}
+        ${phone ? `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0;">
+          <div><div style="font-size:10px; color:#6b6560; font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:3px;">Phone</div><div style="font-size:13px; color:#1a1814;">${esc(phone)}</div></div>
+          <div style="display:flex; gap:6px;">
+            <button onclick="navigator.clipboard.writeText('${esc(phone)}').then(()=>showToast('Phone copied ✓'))" style="font-size:11px; padding:5px 10px; border-radius:5px; border:1px solid rgba(0,0,0,0.1); background:transparent; cursor:pointer; color:#6b6560; font-family:'DM Mono',monospace;">Copy</button>
+            <a href="tel:${phone}" style="text-decoration:none;"><button style="font-size:11px; padding:5px 10px; border-radius:5px; border:none; background:#080809; cursor:pointer; color:#f0eeeb; font-family:'DM Mono',monospace;">Call ↗</button></a>
+          </div>
+        </div>` : ''}
+        ${!email && !phone ? `<div style="font-size:13px; color:#6b6560; padding:8px 0;">No direct contact found. <br><br><a href="https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('hiring manager ' + lead.company)}" target="_blank" style="color:#c8b89a; text-decoration:none;">Search hiring manager on LinkedIn ↗</a></div>` : ''}
+      `;
+    } else {
+      document.getElementById('contactNotFound').style.display = 'block';
+      document.getElementById('drawerLinkedInSearch').href = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('hiring manager ' + lead.company)}`;
+    }
+  }, 500);
+}
+
+function copyDrawerMessage() {
+  const msg = document.getElementById('drawerMessage').textContent;
+  navigator.clipboard.writeText(msg).then(() => {
+    document.getElementById('copyMsgBtn').textContent = '✓ Copied';
+    setTimeout(() => document.getElementById('copyMsgBtn').textContent = 'Copy', 2000);
+    showToast('Message copied ✓');
+  });
+}
+
+function openEmailClient() {
+  if (!currentDrawerLead) return;
+  const lead = currentDrawerLead;
+  const email = lead.contactEmail || lead.email || '';
+  window.location.href = `mailto:${email}?subject=${encodeURIComponent(lead.company + ' — Sales Talent, 72hr Shortlist')}&body=${encodeURIComponent(lead.message || '')}`;
+}
+
+function markDrawerContacted() {
+  if (!currentDrawerLead) return;
+  contactedIds.add(currentDrawerLead.id);
+  localStorage.setItem('kl_engine_contacted', JSON.stringify([...contactedIds]));
+  showToast('✓ Marked as contacted: ' + currentDrawerLead.company);
+  closeDrawer();
+  applyFilters(currentFilter, currentSearch);
+}
+
+async function pushCurrentLead() {
+  if (!currentDrawerLead) return;
+  await pushToCRM(currentDrawerLead.id);
+  const pushBtn = document.getElementById('drawerPushBtn');
+  pushBtn.textContent = '✓ Pushed to CRM';
+  pushBtn.style.opacity = '0.5';
+  pushBtn.disabled = true;
 }
 </script>
 </body>
