@@ -388,6 +388,11 @@
     <button class="tab" onclick="filterLeads('new', this)">New 24h</button>
     <button class="tab" onclick="filterLeads('pushed', this)">Pushed</button>
     <button class="tab" onclick="filterLeads('has_contact', this)">📧 Has Contact</button>
+    <button class="tab" onclick="filterLeads('HIRER', this)">🏢 Hirers</button>
+    <button class="tab" onclick="filterLeads('TALENT', this)">👤 Talent</button>
+    <button class="tab" onclick="filterLeads('UAE', this)">🇦🇪 UAE</button>
+    <button class="tab" onclick="filterLeads('LEBANON', this)">🇱🇧 Lebanon</button>
+    <button class="tab" onclick="filterLeads('USA', this)">🇺🇸 USA</button>
   </div>
   <input type="text" class="search-input" id="searchInput" placeholder="Search company, role, location..." oninput="searchLeads(this.value)">
   <span class="results-count" id="resultsCount"></span>
@@ -555,6 +560,24 @@ function updateStatusBar() {
 // Update status bar every minute
 setInterval(updateStatusBar, 60000);
 
+async function updateLiveStatus() {
+  try {
+    const res = await fetch('/api/state');
+    const state = await res.json();
+    if (state.lastRun) {
+      const ago = Math.floor((Date.now() - new Date(state.lastRun).getTime()) / 60000);
+      const statusEl = document.getElementById('statusText');
+      if (statusEl) statusEl.textContent = ago < 2 ? '● Live — just updated' : `● Last update: ${ago}m ago`;
+      const lastEl = document.getElementById('lastScrapeTime');
+      if (lastEl) lastEl.textContent = `${state.newThisRun || 0} new this run`;
+      const todayEl = document.getElementById('totalToday');
+      if (todayEl) todayEl.textContent = `${state.hirers || 0} hirers · ${state.talent || 0} talent`;
+    }
+  } catch {}
+}
+setInterval(updateLiveStatus, 60000);
+updateLiveStatus();
+
 window.addEventListener('load', async () => {
   // Load persisted leads from cache
   const cached = localStorage.getItem('kl_engine_leads');
@@ -694,11 +717,13 @@ function searchLeads(query) {
 
 function applyFilters(filter, search) {
   let leads = allLeads;
-  if (filter === 'Hot' || filter === 'Warm' || filter === 'Cold') leads = leads.filter(l => l.heat === filter);
-  if (filter === 'new') { const y = Date.now() - 86400000; leads = leads.filter(l => new Date(l.scrapedAt||l.postedAt).getTime() > y); }
-  if (filter === 'pushed') leads = leads.filter(l => pushedIds.has(l.id));
-  if (filter === 'has_contact') leads = leads.filter(l => l.contactEmail || l.contactPhone);
-  if (search) leads = leads.filter(l => (l.company+' '+l.title+' '+l.location).toLowerCase().includes(search));
+  if (['Hot','Warm','Cold'].includes(filter)) leads = leads.filter(l => l.heat === filter);
+  else if (['HIRER','TALENT'].includes(filter)) leads = leads.filter(l => l.leadType === filter);
+  else if (['UAE','LEBANON','USA'].includes(filter)) leads = leads.filter(l => l.market === filter);
+  else if (filter === 'has_contact') leads = leads.filter(l => l.contactEmail || l.contactPhone);
+  else if (filter === 'new') { const c = Date.now()-86400000; leads = leads.filter(l => new Date(l.scrapedAt||l.postedAt).getTime() > c); }
+  else if (filter === 'pushed') leads = leads.filter(l => pushedIds.has(l.id));
+  if (search) { const q = search.toLowerCase(); leads = leads.filter(l => (l.company+' '+l.title+' '+l.location+' '+(l.contactEmail||'')).toLowerCase().includes(q)); }
   filteredLeads = leads;
   renderLeads(leads);
   document.getElementById('resultsCount').textContent = leads.length + ' leads';
@@ -748,11 +773,11 @@ function renderRow(lead) {
       <input type="checkbox" ${selected.has(lead.id)?'checked':''} onchange="toggleSelect('${lead.id}', this.checked)" style="cursor:pointer;">
     </td>
     <td>
-      <div style="font-weight:600; color:#1a1814; font-size:13px;">${esc(lead.company)}</div>
+      <div style="font-weight:600; color:#1a1814; font-size:13px;">${esc(lead.company)} ${lead.leadType === 'TALENT' ? '<span style="font-size:9px;background:rgba(37,99,235,0.1);color:#2563eb;padding:2px 6px;border-radius:10px;font-family:\'DM Mono\',monospace;font-weight:600;vertical-align:middle;margin-left:4px;">TALENT</span>' : ''}</div>
       <div style="color:#6b6560; font-size:12px; margin-top:2px;">${esc(lead.title)}</div>
       ${lead.contactEmail ? `<div style="font-size:11px; color:#c8b89a; margin-top:3px; font-family:'DM Mono',monospace;">${esc(lead.contactEmail)}</div>` : ''}
     </td>
-    <td style="color:#6b6560; font-size:12px;">${esc(lead.location)}</td>
+    <td style="color:#6b6560; font-size:12px;">${lead.market === 'UAE' ? '🇦🇪 ' : lead.market === 'USA' ? '🇺🇸 ' : lead.market === 'LEBANON' ? '🇱🇧 ' : ''}${esc(lead.location)}</td>
     <td><span class="source-tag">${esc(lead.source)}</span></td>
     <td><span class="heat-badge heat-${lead.heat}">${lead.heat === 'Hot' ? '🔥 ' : lead.heat === 'Warm' ? '♨ ' : ''}${lead.heat}</span></td>
     <td style="font-family:'DM Mono',monospace; font-size:12px; color:#6b6560;">${lead.score}</td>

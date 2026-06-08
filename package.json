@@ -1,12 +1,13 @@
 {
   "name": "kinleague-lead-engine",
-  "version": "1.0.0",
-  "description": "Kinleague Lead Engine — Sales talent intelligence for UAE & Lebanon",
+  "version": "2.0.0",
+  "description": "Kinleague Lead Engine — 24/7 Sales Intelligence for UAE, USA & Lebanon",
   "scripts": {
-    "scrape": "node scraper/index.js",
+    "scrape": "node scraper/engine.js",
+    "run:continuous": "node scraper/runner.js",
     "dev": "vercel dev",
     "deploy": "vercel --prod --yes",
-    "postinstall": "echo 'Kinleague Lead Engine ready'"
+    "postinstall": "echo 'Kinleague Lead Engine v2.0 ready'"
   },
   "dependencies": {
     "axios": "^1.6.0",
