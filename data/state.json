@@ -1,17 +1,11 @@
 {
-  "lastRun": "2026-06-08T19:20:39.213Z",
-  "totalLeads": 116,
-  "newThisRun": 116,
+  "lastRun": "2026-06-08T19:59:11.249Z",
+  "total": 116,
+  "newThisRun": 0,
+  "hot": 11,
+  "warm": 101,
   "withPhone": 4,
-  "withWhatsApp": 0,
-  "withEmail": 0,
-  "withAnyContact": 4,
-  "hotLeads": 11,
   "hirers": 116,
   "talent": 0,
-  "uae": 65,
-  "lebanon": 13,
-  "pushedThisRun": 4,
-  "totalPushed": 3,
-  "durationSec": "235.4"
+  "sources": {}
 }

@@ -322,9 +322,15 @@
   </div>
   <div class="header-right">
     <span id="lastRun"></span>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div id="engineDot" style="width:8px;height:8px;border-radius:50%;background:#27ae60;animation:enginePulse 2s infinite;flex-shrink:0;"></div>
+      <span style="font-size:11px;color:rgba(240,238,235,0.5);letter-spacing:.5px;">ENGINE RUNNING</span>
+    </div>
     <button class="btn btn-outline" onclick="exportCSV()">↓ Export CSV</button>
-    <button class="btn btn-primary" id="scrapeBtn" onclick="runScraper()">▶ Run Scraper</button>
   </div>
+  <style>
+    @keyframes enginePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(1.3)}}
+  </style>
 </div>
 
 <div id="liveBar" style="background:#080809; padding:8px 32px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; border-bottom:1px solid rgba(200,184,154,0.1); font-family:'DM Mono',monospace; font-size:11px;">
@@ -341,7 +347,7 @@
   </div>
   <div style="display:flex; align-items:center; gap:12px;">
     <span id="liveLastRun" style="color:rgba(240,238,235,0.3);">checking...</span>
-    <span style="color:rgba(240,238,235,0.5);">Refresh in <span id="countdown" style="color:#c8b89a;">5:00</span></span>
+    <span style="color:rgba(240,238,235,0.5);">Next refresh in <span id="countdown" style="color:#c8b89a;">60</span>s</span>
   </div>
   <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>
 </div>
@@ -397,10 +403,11 @@
 <div class="content">
   <div id="leadsContainer">
     <div class="empty-state">
-      <h3>No leads yet</h3>
-      <p>Click <strong>Run Scraper</strong> to find companies actively hiring<br>Sales & Marketing talent in UAE and Lebanon right now.</p>
-      <br><br>
-      <button class="btn btn-primary" onclick="runScraper()" style="margin:0 auto;font-size:12px;padding:10px 22px;">▶ Run Scraper Now</button>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:#27ae60;animation:enginePulse 2s infinite;"></div>
+        <h3 style="margin:0;">Engine is running</h3>
+      </div>
+      <p>The engine automatically scrapes 14 live sources every minute.<br>Leads will appear here shortly.</p>
     </div>
   </div>
 </div>
@@ -600,40 +607,8 @@ window.addEventListener('load', async () => {
   updateStatusBar();
 });
 
-// ─── SCRAPER ─────────────────────────────────────────────────────────────────
-async function runScraper() {
-  const btn = document.getElementById('scrapeBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Scraping...';
-  document.getElementById('progressBar').classList.add('active');
-  showToast('Scraping LinkedIn, Indeed, Bayt, Glassdoor… ~30–60 seconds');
-
-  try {
-    const res = await fetch('/api/scrape', { method: 'POST' });
-    const data = await res.json();
-
-    if (data.success && data.leads) {
-      allLeads = data.leads;
-      localStorage.setItem('kl_engine_leads', JSON.stringify(allLeads));
-      localStorage.setItem('kl_engine_last_run', new Date().toISOString());
-      applyFilters(currentFilter, currentSearch);
-      updateStats();
-      const hot = allLeads.filter(l => l.heat === 'Hot').length;
-      showToast(`✓ Found ${data.count} leads — ${hot} hot, ${allLeads.filter(l=>l.heat==='Warm').length} warm`);
-      document.getElementById('lastRun').textContent = 'Last run: ' + new Date().toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
-    } else {
-      showToast('Scraper error: ' + (data.error || 'Unknown error'));
-    }
-  } catch (err) {
-    // If API not available (local dev without vercel dev), use demo data
-    showToast('API not available — loading demo leads');
-    loadDemoLeads();
-  }
-
-  btn.disabled = false;
-  btn.innerHTML = '▶ Run Scraper';
-  document.getElementById('progressBar').classList.remove('active');
-}
+// ─── AUTO ENGINE — no manual scraper ─────────────────────────────────────────
+// runScraper() removed; engine runs automatically via GitHub Actions every minute
 
 function loadDemoLeads() {
   const demoRaw = [
@@ -1073,29 +1048,42 @@ async function pushCurrentLead() {
   pushBtn.disabled = true;
 }
 
-// ── AUTO-REFRESH every 5 minutes ──────────────────────────────
-let _refreshTimer = 300;
+// ── AUTO-REFRESH every 60 seconds ─────────────────────────────
+let _refreshTimer = 60;
 let _refreshInterval = null;
+let _errorBackoff = false;
+
+function _playNewLeadSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+  } catch {}
+}
 
 function _startCountdown() {
   clearInterval(_refreshInterval);
-  _refreshTimer = 300;
+  _refreshTimer = 60;
   _refreshInterval = setInterval(async () => {
     _refreshTimer--;
-    const m = Math.floor(_refreshTimer / 60);
-    const s = _refreshTimer % 60;
     const el = document.getElementById('countdown');
-    if (el) el.textContent = m + ':' + String(s).padStart(2,'0');
+    if (el) el.textContent = _refreshTimer;
     if (_refreshTimer <= 0) {
-      _refreshTimer = 300;
+      _refreshTimer = 60;
       await _refreshLeads();
     }
   }, 1000);
 }
 
 async function _refreshLeads() {
+  const dot = document.getElementById('liveDot');
+  const engDot = document.getElementById('engineDot');
   try {
-    const dot = document.getElementById('liveDot');
     if (dot) dot.style.background = '#f39c12';
     const res = await fetch('/api/leads-data?limit=1000&t=' + Date.now());
     const data = await res.json();
@@ -1107,14 +1095,27 @@ async function _refreshLeads() {
       _updateLiveBar(data);
       if (data.leads.length > prev) {
         const diff = data.leads.length - prev;
-        const wp = data.leads.filter(l => l.phone || l.whatsapp || l.contactPhone).length;
-        console.log('+' + diff + ' new leads | ' + wp + ' with phone');
+        const hot = data.leads.filter(l => l.heat === 'Hot').length;
+        showToast(`+${diff} new lead${diff>1?'s':''} — ${hot} hot 🔥`);
+        _playNewLeadSound();
       }
     }
     if (dot) dot.style.background = '#27ae60';
+    if (engDot) engDot.style.background = '#27ae60';
+    _errorBackoff = false;
   } catch {
-    const dot = document.getElementById('liveDot');
     if (dot) dot.style.background = '#e74c3c';
+    if (engDot) engDot.style.background = '#e74c3c';
+    // On error, back off to 15s retry
+    if (!_errorBackoff) {
+      _errorBackoff = true;
+      clearInterval(_refreshInterval);
+      setTimeout(() => {
+        _errorBackoff = false;
+        _refreshLeads();
+        _startCountdown();
+      }, 15000);
+    }
   }
 }
 

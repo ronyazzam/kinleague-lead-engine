@@ -2,7 +2,7 @@ name: Kinleague Lead Engine
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '* * * * *'
   workflow_dispatch:
 
 jobs:
@@ -38,9 +38,9 @@ jobs:
           node -e "
             try {
               const s = require('./data/state.json');
-              console.log('Total:', s.totalLeads, '| New:', s.newThisRun);
-              console.log('Phone:', s.withPhone, '| WhatsApp:', s.withWhatsApp, '| Email:', s.withEmail);
-              console.log('Hot:', s.hotLeads, '| Pushed:', s.pushedThisRun, '| Time:', s.durationSec+'s');
+              console.log('Total:', s.total, '| New:', s.newThisRun);
+              console.log('Hot:', s.hot, '| Warm:', s.warm, '| WithPhone:', s.withPhone);
+              console.log('Hirers:', s.hirers, '| Talent:', s.talent);
             } catch(e) { console.log('No state yet'); }
           "
 
@@ -50,7 +50,7 @@ jobs:
           git config user.email "bot@kinleague.com"
           git config user.name "Lead Bot"
           git add data/
-          git diff --staged --quiet || git commit -m "leads: $(date -u '+%H:%M') $(node -e "try{const s=require('./data/state.json');process.stdout.write(s.totalLeads+' total, '+s.withPhone+' phones, '+s.newThisRun+' new')}catch{}" 2>/dev/null)"
+          git diff --staged --quiet || git commit -m "leads: $(date -u '+%H:%M') $(node -e "try{const s=require('./data/state.json');process.stdout.write(s.total+' total, '+s.withPhone+' phones, '+s.newThisRun+' new')}catch{}" 2>/dev/null)"
           git push || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
