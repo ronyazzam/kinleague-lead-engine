@@ -20,7 +20,9 @@ export default function handler(req, res) {
       hirers: leads.filter(l=>l.leadType==='HIRER').length,
       talent: leads.filter(l=>l.leadType==='TALENT').length,
       hot: leads.filter(l=>l.heat==='Hot').length,
-      withEmail: leads.filter(l=>l.contactEmail).length,
+      withPhone: leads.filter(l=>l.phone||l.contactPhone).length,
+      withWhatsApp: leads.filter(l=>l.whatsapp).length,
+      withEmail: leads.filter(l=>l.email||l.contactEmail).length,
     });
   } catch(e) { res.status(500).json({ error: e.message, leads: [], total: 0 }); }
 }

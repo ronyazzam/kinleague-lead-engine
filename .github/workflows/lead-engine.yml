@@ -1,4 +1,4 @@
-name: Kinleague Lead Engine 24/7
+name: Kinleague Lead Engine
 
 on:
   schedule:
@@ -9,7 +9,6 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 4
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,12 +22,11 @@ jobs:
 
       - run: npm ci
 
-      - name: Restore data cache
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: data/
-          key: leads-${{ github.run_number }}
-          restore-keys: leads-
+          key: kinleague-leads-${{ github.run_number }}
+          restore-keys: kinleague-leads-
 
       - name: Run engine
         run: node scraper/engine.js
@@ -40,9 +38,9 @@ jobs:
           node -e "
             try {
               const s = require('./data/state.json');
-              console.log('Total:', s.totalLeads, '| New:', s.newThisRun, '| Hot:', s.hotLeads);
-              console.log('Phone:', s.withPhone, '| Email:', s.withEmail, '| Pushed:', s.pushedThisRun);
-              console.log('Hirers:', s.hirers, '| Talent:', s.talent, '| Guarantee:', s.minLeadsGuarantee);
+              console.log('Total:', s.totalLeads, '| New:', s.newThisRun);
+              console.log('Phone:', s.withPhone, '| WhatsApp:', s.withWhatsApp, '| Email:', s.withEmail);
+              console.log('Hot:', s.hotLeads, '| Pushed:', s.pushedThisRun, '| Time:', s.durationSec+'s');
             } catch(e) { console.log('No state yet'); }
           "
 
@@ -50,9 +48,9 @@ jobs:
         if: always()
         run: |
           git config user.email "bot@kinleague.com"
-          git config user.name "Lead Engine Bot"
+          git config user.name "Lead Bot"
           git add data/
-          git diff --staged --quiet || git commit -m "leads: $(date -u '+%H:%M') — $(node -e "try{const s=require('./data/state.json');process.stdout.write(s.totalLeads+' total, '+s.newThisRun+' new, '+s.withPhone+' phones')}catch{}" 2>/dev/null)"
+          git diff --staged --quiet || git commit -m "leads: $(date -u '+%H:%M') $(node -e "try{const s=require('./data/state.json');process.stdout.write(s.totalLeads+' total, '+s.withPhone+' phones, '+s.newThisRun+' new')}catch{}" 2>/dev/null)"
           git push || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

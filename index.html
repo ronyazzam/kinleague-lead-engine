@@ -327,30 +327,24 @@
   </div>
 </div>
 
-<!-- Live Status Bar -->
-<div id="liveStatus" style="background:#0d0d0e; border-bottom:1px solid rgba(200,184,154,0.12);
-  padding:7px 32px; display:flex; align-items:center; gap:20px; font-family:'DM Mono',monospace;
-  font-size:10px; color:rgba(240,238,235,0.38); overflow-x:auto; white-space:nowrap;">
-  <div style="display:flex; align-items:center; gap:6px;">
-    <div id="statusDot" style="width:6px; height:6px; border-radius:50%; background:#16a34a; flex-shrink:0;
-      box-shadow:0 0 6px rgba(22,163,74,0.6); animation:statusPulse 2.5s ease-in-out infinite;"></div>
-    <span>Lead Engine Active</span>
+<div id="liveBar" style="background:#080809; padding:8px 32px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; border-bottom:1px solid rgba(200,184,154,0.1); font-family:'DM Mono',monospace; font-size:11px;">
+  <div style="display:flex; align-items:center; gap:16px;">
+    <div style="display:flex; align-items:center; gap:6px;">
+      <div id="liveDot" style="width:6px;height:6px;border-radius:50%;background:#27ae60;animation:pulse 2s infinite;"></div>
+      <span style="color:rgba(240,238,235,0.6);">LIVE ENGINE</span>
+    </div>
+    <span id="liveTotal" style="color:#c8b89a;">— leads</span>
+    <span style="color:rgba(240,238,235,0.3);">|</span>
+    <span id="livePhone" style="color:rgba(240,238,235,0.7);">— with phone</span>
+    <span style="color:rgba(240,238,235,0.3);">|</span>
+    <span id="liveHot" style="color:#e74c3c;">— hot</span>
   </div>
-  <span style="opacity:0.3;">|</span>
-  <span id="lastScrapeTime">Last scrape: —</span>
-  <span style="opacity:0.3;">|</span>
-  <span id="nextScrapeTime">Next auto-run: every 2h via GitHub Actions</span>
-  <span style="opacity:0.3;">|</span>
-  <span id="totalToday">Today: — leads</span>
-  <span style="opacity:0.3;">|</span>
-  <span style="color:rgba(200,184,154,0.5);">Platforms: LinkedIn · Indeed · Bayt · Glassdoor · NaukriGulf · GulfTalent · Wuzzuf · RemoteOK</span>
+  <div style="display:flex; align-items:center; gap:12px;">
+    <span id="liveLastRun" style="color:rgba(240,238,235,0.3);">checking...</span>
+    <span style="color:rgba(240,238,235,0.5);">Refresh in <span id="countdown" style="color:#c8b89a;">5:00</span></span>
+  </div>
+  <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>
 </div>
-<style>
-@keyframes statusPulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(22,163,74,0.6); }
-  50% { opacity: 0.4; box-shadow: 0 0 2px rgba(22,163,74,0.2); }
-}
-</style>
 
 <div class="stats-bar">
   <div class="stat-card">
@@ -721,8 +715,8 @@ function applyFilters(filter, search) {
   if (['Hot','Warm','Cold'].includes(filter)) leads = leads.filter(l => l.heat === filter);
   else if (['HIRER','TALENT'].includes(filter)) leads = leads.filter(l => l.leadType === filter);
   else if (['UAE','LEBANON','USA'].includes(filter)) leads = leads.filter(l => l.market === filter);
-  else if (filter === 'has_phone') leads = leads.filter(l => l.contactPhone);
-  else if (filter === 'has_email') leads = leads.filter(l => l.contactEmail);
+  else if (filter === 'has_phone') leads = leads.filter(l => l.phone || l.contactPhone || l.whatsapp);
+  else if (filter === 'has_email') leads = leads.filter(l => l.email || l.contactEmail);
   else if (filter === 'has_contact') leads = leads.filter(l => l.contactEmail || l.contactPhone);
   else if (filter === 'new') { const c = Date.now()-86400000; leads = leads.filter(l => new Date(l.scrapedAt||l.postedAt).getTime() > c); }
   else if (filter === 'pushed') leads = leads.filter(l => pushedIds.has(l.id));
@@ -767,6 +761,9 @@ function renderRow(lead) {
   const isPushed = pushedIds.has(lead.id);
   const isContacted = contactedIds.has(lead.id);
   const safeId = lead.id.replace(/[^a-z0-9_]/gi, '_');
+  const phone = lead.phone || lead.contactPhone || null;
+  const wa = lead.whatsapp || null;
+  const email = lead.email || lead.contactEmail || null;
 
   return `<tr id="row-${safeId}"
     onclick="openDrawer('${lead.id}')"
@@ -778,7 +775,7 @@ function renderRow(lead) {
     <td>
       <div style="font-weight:600; color:#1a1814; font-size:13px;">${esc(lead.company)} ${lead.leadType === 'TALENT' ? '<span style="font-size:9px;background:rgba(37,99,235,0.1);color:#2563eb;padding:2px 6px;border-radius:10px;font-family:\'DM Mono\',monospace;font-weight:600;vertical-align:middle;margin-left:4px;">TALENT</span>' : ''}</div>
       <div style="color:#6b6560; font-size:12px; margin-top:2px;">${esc(lead.title)}</div>
-      ${lead.contactEmail ? `<div style="font-size:11px; color:#c8b89a; margin-top:3px; font-family:'DM Mono',monospace;">${esc(lead.contactEmail)}</div>` : ''}
+      ${wa ? `<div style="font-size:11px; color:#27ae60; margin-top:3px; font-family:'DM Mono',monospace;">💬 ${esc(wa)}</div>` : phone ? `<div style="font-size:11px; color:#c8b89a; margin-top:3px; font-family:'DM Mono',monospace;">📞 ${esc(phone)}</div>` : email ? `<div style="font-size:11px; color:rgba(200,184,154,0.7); margin-top:3px; font-family:'DM Mono',monospace;">${esc(email)}</div>` : ''}
     </td>
     <td style="color:#6b6560; font-size:12px;">${lead.market === 'UAE' ? '🇦🇪 ' : lead.market === 'USA' ? '🇺🇸 ' : lead.market === 'LEBANON' ? '🇱🇧 ' : ''}${esc(lead.location)}</td>
     <td><span class="source-tag">${esc(lead.source)}</span></td>
@@ -1074,6 +1071,75 @@ async function pushCurrentLead() {
   pushBtn.textContent = '✓ Pushed to CRM';
   pushBtn.style.opacity = '0.5';
   pushBtn.disabled = true;
+}
+
+// ── AUTO-REFRESH every 5 minutes ──────────────────────────────
+let _refreshTimer = 300;
+let _refreshInterval = null;
+
+function _startCountdown() {
+  clearInterval(_refreshInterval);
+  _refreshTimer = 300;
+  _refreshInterval = setInterval(async () => {
+    _refreshTimer--;
+    const m = Math.floor(_refreshTimer / 60);
+    const s = _refreshTimer % 60;
+    const el = document.getElementById('countdown');
+    if (el) el.textContent = m + ':' + String(s).padStart(2,'0');
+    if (_refreshTimer <= 0) {
+      _refreshTimer = 300;
+      await _refreshLeads();
+    }
+  }, 1000);
+}
+
+async function _refreshLeads() {
+  try {
+    const dot = document.getElementById('liveDot');
+    if (dot) dot.style.background = '#f39c12';
+    const res = await fetch('/api/leads-data?limit=1000&t=' + Date.now());
+    const data = await res.json();
+    if (data.leads && data.leads.length > 0) {
+      const prev = allLeads.length;
+      allLeads = data.leads;
+      applyFilters(currentFilter, document.getElementById('searchInput')?.value || '');
+      updateStats();
+      _updateLiveBar(data);
+      if (data.leads.length > prev) {
+        const diff = data.leads.length - prev;
+        const wp = data.leads.filter(l => l.phone || l.whatsapp || l.contactPhone).length;
+        console.log('+' + diff + ' new leads | ' + wp + ' with phone');
+      }
+    }
+    if (dot) dot.style.background = '#27ae60';
+  } catch {
+    const dot = document.getElementById('liveDot');
+    if (dot) dot.style.background = '#e74c3c';
+  }
+}
+
+function _updateLiveBar(data) {
+  const tot = document.getElementById('liveTotal');
+  const ph  = document.getElementById('livePhone');
+  const hot = document.getElementById('liveHot');
+  const last = document.getElementById('liveLastRun');
+  if (tot) tot.textContent = (data.total || allLeads.length) + ' leads';
+  if (ph) {
+    const n = allLeads.filter(l => l.phone || l.whatsapp || l.contactPhone).length;
+    ph.textContent = n + ' with phone';
+  }
+  if (hot) hot.textContent = allLeads.filter(l => l.heat === 'Hot').length + ' hot';
+  if (last && data.state?.lastRun) {
+    const mins = Math.floor((Date.now() - new Date(data.state.lastRun).getTime()) / 60000);
+    last.textContent = mins < 1 ? 'just updated' : 'updated ' + mins + 'm ago';
+  }
+}
+
+// Init on page load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => { _refreshLeads(); _startCountdown(); });
+} else {
+  _refreshLeads(); _startCountdown();
 }
 </script>
 </body>
