@@ -115,42 +115,67 @@ function filterNew(existing, incoming, dedupIdx) {
 }
 
 // ─── Phone validation ────────────────────────────────────────────────────────
-const FAKE_PHONE = [
-  /^(\d)\1{6,}$/,
-  /^(012345|123456|234567)/,
-  /^0{5,}/, /^1{5,}/, /^9{5,}/,
-];
+// STRICT: only accept numbers that begin with a known country code or UAE local format.
+// This prevents Unix timestamps, IDs, and random digit strings from being captured.
 
 function validatePhone(raw) {
-  if (!raw) return null;
-  const cleaned = raw.replace(/[\s\-().]/g, '');
+  if (!raw || typeof raw !== 'string') return null;
+  const cleaned = raw.replace(/[\s\-().]/g, '').trim();
   const digits = cleaned.replace(/\D/g, '');
-  if (digits.length < 7 || digits.length > 15) return null;
-  if (FAKE_PHONE.some(p => p.test(digits))) return null;
-  // Sequential check
+
+  // Length gate
+  if (digits.length < 8 || digits.length > 15) return null;
+
+  // UAE mobile local: 05X XXXXXXX → 11 digits including leading 0
+  if (/^05[024568]\d{7}$/.test(cleaned)) {
+    return '+971' + cleaned.slice(1); // 0501234567 → +971501234567
+  }
+
+  // Must start with explicit country code — NO exceptions
+  const CC_MAP = {
+    '+971': '+971',   // UAE
+    '00971': '+971',
+    '+961': '+961',   // Lebanon
+    '00961': '+961',
+    '+1':   '+1',     // USA/Canada
+    '+966': '+966',   // Saudi
+    '+965': '+965',   // Kuwait
+    '+974': '+974',   // Qatar
+    '+973': '+973',   // Bahrain
+    '+968': '+968',   // Oman
+    '+20':  '+20',    // Egypt
+  };
+
+  const matchedCC = Object.keys(CC_MAP).find(cc => cleaned.startsWith(cc));
+  if (!matchedCC) return null; // No known country code → REJECT
+
+  // After country code, must have 6-12 more digits
+  const afterCC = digits.slice(matchedCC.replace(/\D/g,'').length);
+  if (afterCC.length < 6 || afterCC.length > 12) return null;
+
+  // Reject all-same-digit and sequential patterns
+  if (/^(\d)\1{5,}$/.test(digits)) return null;
   let seq = 0;
   for (let i = 1; i < digits.length; i++) {
     if (+digits[i] === +digits[i-1] + 1) { if (++seq >= 5) return null; }
     else seq = 0;
   }
-  const hasCC = ['+971','+961','+1','+966','+965','+974','+20','00971','00961'].some(c => cleaned.startsWith(c));
-  const isUAELocal = /^05[024568]\d{7}$/.test(cleaned);
-  const isUSLocal = /^[2-9]\d{9}$/.test(digits);
-  if (!hasCC && !isUAELocal && !isUSLocal && digits.length < 10) return null;
-  if (isUAELocal) return '+971' + cleaned.slice(1);
-  if (cleaned.startsWith('+')) return cleaned;
+
+  // Normalize to + prefix
   if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
-  return cleaned;
+  return cleaned.startsWith('+') ? cleaned : '+' + cleaned;
 }
 
 function extractPhones(text) {
+  // STRICT patterns — only with explicit country code or UAE local
   const patterns = [
-    /\+971[\s\-]?(?:5[024568]|4|2)[\s\-]?\d{3}[\s\-]?\d{4}/g,
-    /\+961[\s\-]?\d{1,2}[\s\-]?\d{3}[\s\-]?\d{3}/g,
-    /\+1[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}/g,
-    /05[024568][\s\-]?\d{3}[\s\-]?\d{4}/g,
-    /\(?\d{3}\)?[\s\-]\d{3}[\s\-]\d{4}/g,
-    /\+\d{1,3}[\s\-]\d{2,4}[\s\-]\d{3,4}[\s\-]\d{3,4}/g,
+    /\+971[\s\-]?(?:5[024568]|[24679])[\s\-]?\d{3}[\s\-]?\d{4}/g,  // UAE +971
+    /00971[\s\-]?(?:5[024568]|[24679])[\s\-]?\d{3}[\s\-]?\d{4}/g,  // UAE 00971
+    /05[024568][\s\-]?\d{3}[\s\-]?\d{4}/g,                          // UAE local 05X
+    /\+961[\s\-]?\d{1,2}[\s\-]?\d{3}[\s\-]?\d{3,4}/g,              // Lebanon +961
+    /\+1[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}/g,              // USA +1
+    /\+966[\s\-]?\d[\s\-]?\d{3}[\s\-]?\d{4}/g,                     // Saudi +966
+    /\+\d{2,3}[\s\-]\d{2,4}[\s\-]\d{3,4}[\s\-]\d{3,4}/g,          // Generic intl with spaces
   ];
   const found = new Set();
   for (const p of patterns) {
@@ -165,13 +190,19 @@ function extractPhones(text) {
 
 // ─── Email validation ────────────────────────────────────────────────────────
 const FAKE_EMAIL_DOMAINS = ['example.com','test.com','fake.com','domain.com','sample.com'];
-const SPAM_PREFIXES = ['noreply','no-reply','donotreply','sentry','cloudflare','mailer-daemon','postmaster','abuse','bounce','notification'];
+const SPAM_PREFIXES = ['noreply','no-reply','donotreply','sentry','cloudflare','mailer-daemon','postmaster','abuse','bounce','notification','unsubscribe','privacy','legal','compliance'];
+const SPAM_DOMAINS = ['sentry.io','ingest.sentry.io','cloudflare.com','amazonaws.com','googletagmanager.com','doubleclick.net','mailchimp.com','sendgrid.net','mandrill.com'];
+
+// Personal email providers — never a company contact
+const PERSONAL_EMAIL_DOMAINS = ['gmail.com','hotmail.com','yahoo.com','outlook.com','icloud.com','protonmail.com','live.com','msn.com','aol.com','mail.com','ymail.com'];
 
 function validateEmail(e) {
   if (!e) return null;
   const em = e.toLowerCase().trim();
   if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(em)) return null;
   if (FAKE_EMAIL_DOMAINS.some(d => em.endsWith(d))) return null;
+  if (PERSONAL_EMAIL_DOMAINS.some(d => em.endsWith(d))) return null;
+  if (SPAM_DOMAINS.some(d => em.includes(d))) return null;
   if (SPAM_PREFIXES.some(p => em.startsWith(p))) return null;
   const tld = em.split('.').pop();
   if (['test','example','local','invalid'].includes(tld)) return null;
@@ -180,7 +211,8 @@ function validateEmail(e) {
 }
 
 function extractEmails(text) {
-  return (text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [])
+  // Word boundary after TLD prevents matching "support@wsj.comfor" or "info@co.aecall"
+  return (text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}(?=[^a-zA-Z]|$)/g) || [])
     .map(validateEmail).filter(Boolean);
 }
 
@@ -285,7 +317,101 @@ function generateMessage(lead) {
   return msgs[lead.heat] || msgs.Warm;
 }
 
+// ─── Company domain finder ───────────────────────────────────────────────────
+// Guesses the company's real website by trying common domain patterns,
+// then falls back to a Google search for the company name.
+
+async function findCompanyDomain(companyName, market) {
+  // Clean company name for domain guessing
+  const clean = companyName
+    .toLowerCase()
+    .replace(/\b(llc|ltd|inc|fze|fzc|corp|co\.|group|holding|holdings|intl|international|mena|uae|dubai|global)\b/gi, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+
+  if (!clean || clean.length < 3) return null;
+
+  // Try most likely TLDs based on market
+  const tlds = market === 'UAE' ? ['.ae', '.com'] :
+               market === 'LEBANON' ? ['.com', '.lb'] :
+               ['.com', '.io', '.co'];
+
+  // Try common TLD patterns first
+  for (const tld of tlds) {
+    const domain = clean + tld;
+    if (ALL_JOB_BOARD_DOMAINS.has(domain)) continue;
+    try {
+      await sleep(200);
+      const { data } = await axios.get(`https://${domain}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        timeout: 4000, maxRedirects: 3,
+      });
+      // Validate: company name must appear on the page
+      const pageText = cheerio.load(data).text().toLowerCase();
+      const nameWords = companyName.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(' ').filter(w => w.length > 3);
+      const matchCount = nameWords.filter(w => pageText.includes(w)).length;
+      if (matchCount >= Math.min(2, nameWords.length)) return domain;
+    } catch {}
+  }
+
+  // Google fallback — only use if result domain actually has company name on it
+  try {
+    await sleep(600);
+    const q = encodeURIComponent(companyName + ' official site contact');
+    const { data } = await axios.get(`https://www.google.com/search?q=${q}&num=5`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: 6000,
+    });
+    const $ = cheerio.load(data);
+    const GOOGLE_SKIP = new Set(['google.com','googleapis.com','gstatic.com','w3.org','schema.org','wikipedia.org','facebook.com','twitter.com','instagram.com']);
+    const candidates = [];
+    $('a[href]').each((_, el) => {
+      const href = $(el).attr('href') || '';
+      const m = href.match(/https?:\/\/(www\.)?([a-z0-9\-\.]+\.[a-z]{2,})/i);
+      if (m) {
+        const host = m[2].toLowerCase();
+        if (!ALL_JOB_BOARD_DOMAINS.has(host) && !GOOGLE_SKIP.has(host)) candidates.push(host);
+      }
+    });
+    // Validate each candidate
+    for (const domain of [...new Set(candidates)].slice(0, 3)) {
+      try {
+        await sleep(300);
+        const { data: pageHtml } = await axios.get(`https://${domain}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 4000, maxRedirects: 3,
+        });
+        const pageText = cheerio.load(pageHtml).text().toLowerCase();
+        const nameWords = companyName.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(' ').filter(w => w.length > 3);
+        const matchCount = nameWords.filter(w => pageText.includes(w)).length;
+        if (matchCount >= Math.min(2, nameWords.length)) return domain;
+      } catch {}
+    }
+  } catch {}
+
+  return null;
+}
+
 // ─── Contact enrichment ───────────────────────────────────────────────────────
+// ALL job board / social / aggregator domains — never use these as company domains
+const ALL_JOB_BOARD_DOMAINS = new Set([
+  'linkedin.com','ae.linkedin.com','www.linkedin.com',
+  'indeed.com','ae.indeed.com','lb.indeed.com','www.indeed.com',
+  'glassdoor.com','www.glassdoor.com',
+  'bayt.com','www.bayt.com',
+  'naukrigulf.com','www.naukrigulf.com',
+  'wuzzuf.net','www.wuzzuf.net',
+  'remoteok.com','www.remoteok.com',
+  'gulftalent.com','www.gulftalent.com',
+  'ziprecruiter.com','www.ziprecruiter.com',
+  'simplyhired.com','www.simplyhired.com',
+  'wellfound.com','www.wellfound.com',
+  'angel.co','www.angel.co',
+  'google.com','www.google.com','jobs.google.com',
+  'crunchbase.com','www.crunchbase.com',
+]);
 const SKIP_DOMAINS = ['linkedin.com','indeed.com','glassdoor.com'];
 const JOB_BOARD_DOMAINS = ['bayt.com','naukrigulf.com','wuzzuf.net','remoteok.com','gulftalent.com','ziprecruiter.com','simplyhired.com','wellfound.com'];
 
@@ -329,23 +455,30 @@ async function enrichContact(lead) {
           }
         } catch {}
       });
-      // Detect company domain from link
+      // Detect company domain from link — never use job board domains
       if (!lead.companyDomain) {
         try {
           const u = new URL(lead.link);
-          const host = u.hostname.replace('www.','');
-          if (![...SKIP_DOMAINS,...JOB_BOARD_DOMAINS].includes(host)) lead.companyDomain = host;
+          const host = u.hostname.toLowerCase();
+          if (!ALL_JOB_BOARD_DOMAINS.has(host) && !ALL_JOB_BOARD_DOMAINS.has(host.replace('www.',''))) {
+            lead.companyDomain = host.replace('www.','');
+          }
         } catch {}
       }
     } catch {}
   }
 
-  // 2. Try company website pages
+  // 2. Find company domain via Google if we don't have one yet
+  if (!lead.companyDomain && lead.company) {
+    lead.companyDomain = await findCompanyDomain(lead.company, lead.market);
+  }
+
+  // 3. Scrape company website for phone + email
   if ((!lead.contactPhone || !lead.contactEmail) && lead.companyDomain) {
     for (const page of ['/contact','/contact-us','/about','/about-us','']) {
       try {
         await sleep(300);
-        const html = await fetchHTML(`https://${lead.companyDomain}${page}`, 6000);
+        const html = await fetchHTML(`https://${lead.companyDomain}${page}`, 7000);
         const text = cheerio.load(html).text();
         if (!lead.contactPhone) { const p = extractPhones(text); if (p[0]) lead.contactPhone = p[0]; }
         if (!lead.contactEmail) { const e = extractEmails(text); if (e[0]) lead.contactEmail = e[0]; }
@@ -354,8 +487,8 @@ async function enrichContact(lead) {
     }
   }
 
-  // 3. Probable emails fallback
-  if (!lead.contactEmail && lead.companyDomain) {
+  // 4. Probable emails fallback — only for real company domains (not job boards)
+  if (!lead.contactEmail && lead.companyDomain && !ALL_JOB_BOARD_DOMAINS.has(lead.companyDomain)) {
     lead.probableEmails = [
       `hiring@${lead.companyDomain}`,
       `hr@${lead.companyDomain}`,
@@ -750,6 +883,23 @@ async function pushToCRM(lead) {
   } catch (e) { console.error('CRM push failed:', e.message); return false; }
 }
 
+// Strip phones/emails that appear on 3+ different companies — definitely a shared scraping artifact
+function stripSharedContacts(leads) {
+  const phoneCounts = {};
+  const emailCounts = {};
+  leads.forEach(l => {
+    if (l.contactPhone) phoneCounts[l.contactPhone] = (phoneCounts[l.contactPhone] || 0) + 1;
+    if (l.contactEmail) emailCounts[l.contactEmail] = (emailCounts[l.contactEmail] || 0) + 1;
+  });
+  let stripped = 0;
+  leads.forEach(l => {
+    if (l.contactPhone && phoneCounts[l.contactPhone] >= 3) { delete l.contactPhone; stripped++; }
+    if (l.contactEmail && emailCounts[l.contactEmail] >= 3) { delete l.contactEmail; stripped++; }
+  });
+  if (stripped > 0) console.log(`Stripped ${stripped} shared/artifact contacts`);
+  return leads;
+}
+
 function saveCsv(leads) {
   const hdr = 'ID,Type,Company,Role,Location,Market,Source,Heat,Score,Phone,Email,Posted,Link';
   const rows = leads.map(l =>
@@ -833,8 +983,10 @@ async function runScrapeAndPush() {
   // ── Score ─────────────────────────────────────────────────────────────────
   const scored = allProcessed.map(l => { const s = scoreLead(l); s.message = generateMessage(s); return s; });
 
-  // ── Merge + final dedup + sort + cap ─────────────────────────────────────
-  const merged = cleanDuplicates([...scored, ...cleanedExisting])
+  // ── Merge + final dedup + strip artifacts + sort + cap ────────────────────
+  const merged = stripSharedContacts(
+    cleanDuplicates([...scored, ...cleanedExisting])
+  )
     .sort((a,b) => { const h={Hot:0,Warm:1,Cold:2}; return h[a.heat]!==h[b.heat] ? h[a.heat]-h[b.heat] : (b.score||0)-(a.score||0); })
     .slice(0, MAX_TOTAL);
 
