@@ -92,8 +92,8 @@ function scoreLead(lead) {
   else if (hoursAgo < 6) score += 40;
   else if (hoursAgo < 24) score += 25;
   else if (hoursAgo < 72) score += 10;
-  if (lead.contactEmail) score += 25;
-  if (lead.contactPhone) score += 15;
+  if (lead.contactPhone) score += 35;  // phone > email — direct dial is gold
+  if (lead.contactEmail) score += 20;
   if (lead.market === 'UAE') score += 15;
   else if (lead.market === 'LEBANON') score += 12;
   else if (lead.market === 'USA') score += 10;
@@ -130,52 +130,121 @@ function generateEmailSubject(lead) {
   return `${lead.title || 'Sales Role'} Opportunity — ${lead.market === 'UAE' ? 'Dubai' : lead.market} | Kinleague`;
 }
 
+// Aggressive phone regexes — UAE (+971), Lebanon (+961), US (+1), generic intl
+const PHONE_PATTERNS = [
+  /(\+971[\s\-]?(?:50|52|54|55|56|58|2|3|4|6|7|9)[\s\-]?\d{3}[\s\-]?\d{4})/g,  // UAE mobile/landline
+  /(\+961[\s\-]?\d[\s\-]?\d{3}[\s\-]?\d{3,4})/g,                                  // Lebanon
+  /(\+1[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4})/g,                             // US
+  /(\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{3,5}[\s\-]?\d{4,6})/g,               // Generic intl with +
+  /((?:050|052|054|055|056|058|04|02|06|07|03|09)[\s\-]?\d{3}[\s\-]?\d{4})/g,    // UAE local format
+  /((?:01|03|70|71|76|78|79|81)[\s\-]?\d{3}[\s\-]?\d{3,4})/g,                    // Lebanon local
+  /((?:\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}))/g,                                // US local
+];
+
+function extractPhones(text) {
+  const found = new Set();
+  for (const re of PHONE_PATTERNS) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const digits = m[1].replace(/\D/g, '');
+      if (digits.length >= 7 && digits.length <= 15) found.add(m[1].trim());
+    }
+  }
+  // filter out obvious non-phones (years, IDs)
+  return [...found].filter(p => !/^(19|20)\d{2}$/.test(p.replace(/\D/g,'')));
+}
+
+function extractEmails(text) {
+  return (text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [])
+    .filter(e => !['noreply','no-reply','sentry','cloudflare','example','test','wix','mailchimp','bounce','support@sentry','notifications@'].some(x => e.toLowerCase().includes(x)));
+}
+
+async function fetchPage(url, timeout = 8000) {
+  const { data } = await axios.get(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    timeout,
+    maxRedirects: 5,
+  });
+  return data;
+}
+
 async function enrichContact(lead) {
-  if (lead.contactEmail && lead.contactPhone) return lead;
-  if (lead.link && !lead.link.includes('linkedin.com') && !lead.link.includes('indeed.com') && lead.link !== '#') {
+  // ── 1. Try job listing page first ──────────────────────────────────────────
+  const skipDomains = ['linkedin.com','indeed.com','glassdoor.com'];
+  if (lead.link && lead.link !== '#' && !skipDomains.some(d => lead.link.includes(d))) {
     try {
-      await new Promise(r => setTimeout(r, 300));
-      const { data } = await axios.get(lead.link, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-        timeout: 8000
-      });
-      const text = cheerio.load(data).text();
+      await delay(400);
+      const html = await fetchPage(lead.link);
+      const text = cheerio.load(html).text();
+
+      // PHONE first (highest priority)
+      if (!lead.contactPhone) {
+        const phones = extractPhones(text);
+        if (phones[0]) lead.contactPhone = phones[0];
+      }
       if (!lead.contactEmail) {
-        const emails = (text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [])
-          .filter(e => !['noreply','no-reply','sentry','cloudflare','example','test','wix','mailchimp'].some(x => e.includes(x)));
+        const emails = extractEmails(text);
         if (emails[0]) lead.contactEmail = emails[0];
       }
-      if (!lead.contactPhone) {
-        const phones = (text.match(/(\+?[\d\s\-().]{10,18})/g) || []);
-        const phone = phones.find(p => { const d = p.replace(/\D/g,''); return d.length >= 8 && d.length <= 15; });
-        if (phone) lead.contactPhone = phone.trim();
-      }
       if (!lead.contactName) {
-        const nm = text.match(/(?:contact|apply to|send to|reach|hiring manager)[\s:]+([A-Z][a-z]+ [A-Z][a-z]+)/i);
+        const nm = text.match(/(?:contact|apply to|send to|reach|hiring manager|hr contact|recruiter)[\s:]+([A-Z][a-z]+ [A-Z][a-z]+)/i);
         if (nm) lead.contactName = nm[1];
+      }
+      // Extract company domain from link
+      if (!lead.companyDomain) {
+        try {
+          const u = new URL(lead.link);
+          if (!skipDomains.concat(['bayt.com','naukrigulf.com','wuzzuf.net','remoteok.com']).includes(u.hostname.replace('www.',''))) {
+            lead.companyDomain = u.hostname.replace('www.','');
+          }
+        } catch {}
       }
     } catch {}
   }
-  if (!lead.contactEmail && lead.companyDomain) {
-    for (const page of ['/contact','/about','']) {
+
+  // ── 2. Scrape company website for phone + email ─────────────────────────────
+  if ((!lead.contactPhone || !lead.contactEmail) && lead.companyDomain) {
+    for (const page of ['/contact', '/contact-us', '/about', '/about-us', '']) {
       try {
-        const { data } = await axios.get(`https://${lead.companyDomain}${page}`, { headers:{'User-Agent':'Mozilla/5.0'}, timeout:5000 });
-        const emails = (data.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)||[]).filter(e=>!['noreply','example','sentry'].some(x=>e.includes(x)));
-        if (emails[0]) { lead.contactEmail = emails[0]; break; }
+        await delay(300);
+        const html = await fetchPage(`https://${lead.companyDomain}${page}`, 6000);
+        const text = cheerio.load(html).text();
+        if (!lead.contactPhone) {
+          const phones = extractPhones(text);
+          if (phones[0]) lead.contactPhone = phones[0];
+        }
+        if (!lead.contactEmail) {
+          const emails = extractEmails(text);
+          if (emails[0]) lead.contactEmail = emails[0];
+        }
+        if (lead.contactPhone && lead.contactEmail) break;
       } catch {}
     }
   }
+
+  // ── 3. Set probable emails if nothing found ─────────────────────────────────
   if (!lead.companyDomain && lead.link) {
     try {
       const u = new URL(lead.link);
-      if (!['linkedin.com','indeed.com','bayt.com','glassdoor.com','naukrigulf.com'].includes(u.hostname.replace('www.',''))) {
-        lead.companyDomain = u.hostname.replace('www.','');
-      }
+      const skip = ['linkedin.com','indeed.com','bayt.com','glassdoor.com','naukrigulf.com','wuzzuf.net','remoteok.com'];
+      if (!skip.includes(u.hostname.replace('www.',''))) lead.companyDomain = u.hostname.replace('www.','');
     } catch {}
   }
   if (!lead.contactEmail && lead.companyDomain) {
-    lead.probableEmails = [`hiring@${lead.companyDomain}`,`hr@${lead.companyDomain}`,`careers@${lead.companyDomain}`,`hello@${lead.companyDomain}`];
+    lead.probableEmails = [
+      `hiring@${lead.companyDomain}`,
+      `hr@${lead.companyDomain}`,
+      `careers@${lead.companyDomain}`,
+      `hello@${lead.companyDomain}`,
+      `recruit@${lead.companyDomain}`,
+    ];
   }
+
   return lead;
 }
 
@@ -493,7 +562,9 @@ async function runScrapeAndPush() {
     newThisRun: scored.length,
     hotLeads: allLeads.filter(l=>l.heat==='Hot').length,
     warmLeads: allLeads.filter(l=>l.heat==='Warm').length,
+    withPhone: allLeads.filter(l=>l.contactPhone).length,
     withEmail: allLeads.filter(l=>l.contactEmail).length,
+    withContact: allLeads.filter(l=>l.contactPhone||l.contactEmail).length,
     hirers: allLeads.filter(l=>l.leadType==='HIRER').length,
     talent: allLeads.filter(l=>l.leadType==='TALENT').length,
     uae: allLeads.filter(l=>l.market==='UAE').length,

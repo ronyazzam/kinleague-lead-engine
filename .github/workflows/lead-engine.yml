@@ -1,14 +1,14 @@
-name: Kinleague Lead Engine — 24/7
+name: Kinleague Lead Engine — Every Minute
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/5 * * * *'   # GitHub minimum is 5 min; we loop inside for 1-min cadence
   workflow_dispatch:
 
 jobs:
-  scrape-and-push:
+  scrape-loop:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8        # tight timeout so next 5-min trigger doesn't overlap
 
     steps:
       - name: Checkout
@@ -38,33 +38,68 @@ jobs:
           key: leads-data-${{ github.run_number }}
           restore-keys: leads-data-
 
-      - name: Run lead engine
+      # ── LOOP: run engine 5x with 60s gap = 1 scrape per minute ───────────────
+      - name: Run 1/5
         run: node scraper/engine.js
         env:
           NODE_ENV: production
 
-      - name: Print summary
+      - name: Wait 60s
+        run: sleep 60
+
+      - name: Run 2/5
+        run: node scraper/engine.js
+        env:
+          NODE_ENV: production
+
+      - name: Wait 60s
+        run: sleep 60
+
+      - name: Run 3/5
+        run: node scraper/engine.js
+        env:
+          NODE_ENV: production
+
+      - name: Wait 60s
+        run: sleep 60
+
+      - name: Run 4/5
+        run: node scraper/engine.js
+        env:
+          NODE_ENV: production
+
+      - name: Wait 60s
+        run: sleep 60
+
+      - name: Run 5/5
+        run: node scraper/engine.js
+        env:
+          NODE_ENV: production
+
+      # ── Summary ───────────────────────────────────────────────────────────────
+      - name: Step summary
+        if: always()
         run: |
-          echo "## Lead Engine Results" >> $GITHUB_STEP_SUMMARY
+          echo "## Lead Engine $(date -u '+%H:%M UTC %d %b')" >> $GITHUB_STEP_SUMMARY
           if [ -f data/state.json ]; then
             node -e "
               const s = require('./data/state.json');
-              const rows = [
+              console.log('| Metric | Value |');
+              console.log('|--------|-------|');
+              [
                 ['Total leads', s.totalLeads],
                 ['New this run', s.newThisRun],
                 ['Hot', s.hotLeads],
+                ['With phone', s.withPhone],
+                ['With email', s.withEmail],
                 ['Hirers', s.hirers],
                 ['Talent', s.talent],
                 ['UAE', s.uae],
                 ['USA', s.usa],
                 ['Lebanon', s.lebanon],
-                ['With email', s.withEmail],
                 ['Pushed to CRM', s.pushedThisRun],
                 ['Duration', (s.durationMs/1000).toFixed(1)+'s'],
-              ];
-              console.log('| Metric | Value |');
-              console.log('|--------|-------|');
-              rows.forEach(([k,v]) => console.log('| '+k+' | '+v+' |'));
+              ].forEach(function(r){console.log('| '+r[0]+' | '+r[1]+' |')});
             " >> $GITHUB_STEP_SUMMARY
           fi
 
@@ -74,15 +109,15 @@ jobs:
         with:
           name: leads-${{ github.run_number }}
           path: data/
-          retention-days: 3
+          retention-days: 2
 
-      - name: Commit leads back to repo
+      - name: Commit leads to repo
         if: always()
         run: |
           git config user.email "engine@kinleague.com"
           git config user.name "Kinleague Lead Engine"
           git add data/ 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "bot: leads $(date -u '+%H:%M %d/%m') — $(node -e "try{const s=require('./data/state.json');process.stdout.write(s.newThisRun+' new, '+s.hotLeads+' hot')}catch{}" 2>/dev/null)"
+          git diff --staged --quiet || git commit -m "bot: $(date -u '+%H:%M %d/%m') $(node -e "try{const s=require('./data/state.json');process.stdout.write(s.newThisRun+' new, '+s.hotLeads+' hot, '+s.withPhone+' phones')}catch{}" 2>/dev/null)"
           git push || echo "Nothing to push"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
