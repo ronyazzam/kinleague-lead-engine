@@ -1,6 +1,8 @@
-import { execSync } from 'child_process';
+import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
+
+const require = createRequire(import.meta.url);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,21 +12,16 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    execSync('node scraper/engine.js', {
-      cwd: process.cwd(),
-      timeout: 110000,
-      stdio: 'pipe'
-    });
+    // Directly import the engine — no child process, so Vercel bundles it correctly
+    const { runScrapeAndPush } = require('../scraper/engine.js');
+    const state = await runScrapeAndPush();
 
     const leadsPath = path.join(process.cwd(), 'data', 'leads.json');
-    const statePath = path.join(process.cwd(), 'data', 'state.json');
-    if (!fs.existsSync(leadsPath)) {
-      return res.status(500).json({ success: false, error: 'Engine ran but produced no output' });
-    }
-    const leads = JSON.parse(fs.readFileSync(leadsPath, 'utf8'));
-    const state = fs.existsSync(statePath) ? JSON.parse(fs.readFileSync(statePath)) : {};
-    res.json({ success: true, count: leads.length, leads, state });
+    const leads = fs.existsSync(leadsPath) ? JSON.parse(fs.readFileSync(leadsPath)) : [];
+
+    res.json({ success: true, count: leads.length, state, leads });
   } catch (err) {
+    console.error('Scraper error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }

@@ -387,7 +387,8 @@
     <button class="tab" onclick="filterLeads('Cold', this)">Cold</button>
     <button class="tab" onclick="filterLeads('new', this)">New 24h</button>
     <button class="tab" onclick="filterLeads('pushed', this)">Pushed</button>
-    <button class="tab" onclick="filterLeads('has_contact', this)">📧 Has Contact</button>
+    <button class="tab" onclick="filterLeads('has_phone', this)">📞 Has Phone</button>
+    <button class="tab" onclick="filterLeads('has_email', this)">📧 Has Email</button>
     <button class="tab" onclick="filterLeads('HIRER', this)">🏢 Hirers</button>
     <button class="tab" onclick="filterLeads('TALENT', this)">👤 Talent</button>
     <button class="tab" onclick="filterLeads('UAE', this)">🇦🇪 UAE</button>
@@ -720,6 +721,8 @@ function applyFilters(filter, search) {
   if (['Hot','Warm','Cold'].includes(filter)) leads = leads.filter(l => l.heat === filter);
   else if (['HIRER','TALENT'].includes(filter)) leads = leads.filter(l => l.leadType === filter);
   else if (['UAE','LEBANON','USA'].includes(filter)) leads = leads.filter(l => l.market === filter);
+  else if (filter === 'has_phone') leads = leads.filter(l => l.contactPhone);
+  else if (filter === 'has_email') leads = leads.filter(l => l.contactEmail);
   else if (filter === 'has_contact') leads = leads.filter(l => l.contactEmail || l.contactPhone);
   else if (filter === 'new') { const c = Date.now()-86400000; leads = leads.filter(l => new Date(l.scrapedAt||l.postedAt).getTime() > c); }
   else if (filter === 'pushed') leads = leads.filter(l => pushedIds.has(l.id));

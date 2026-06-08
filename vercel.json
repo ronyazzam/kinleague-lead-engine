@@ -1,4 +1,16 @@
 {
+  "functions": {
+    "api/scrape.js": {
+      "includeFiles": "scraper/**",
+      "maxDuration": 110
+    },
+    "api/leads-data.js": {
+      "includeFiles": "data/**"
+    },
+    "api/state.js": {
+      "includeFiles": "data/**"
+    }
+  },
   "crons": [
     { "path": "/api/scrape", "schedule": "0 2 * * *" },
     { "path": "/api/scrape", "schedule": "0 6 * * *" },
@@ -8,6 +20,7 @@
     { "path": "/api/scrape", "schedule": "0 22 * * *" }
   ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
